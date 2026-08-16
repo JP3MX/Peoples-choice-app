@@ -1,0 +1,135 @@
+{
+  "theme_strategy": {
+    "mode": "dark",
+    "description": "Tactical/Swiss Aviation Interface. High contrast, dark mode default for hangars and shop floors, reducing eye strain. Functional, flat surfaces with stark borders. Precision over softness.",
+    "archetype": "The Performance Pro / Swiss Brutalist Hybrid"
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Chivo",
+      "body": "IBM Plex Sans",
+      "mono": "IBM Plex Mono",
+      "import_command": "Google Fonts import in index.css: @import url('https://fonts.googleapis.com/css2?family=Chivo:wght@300;400;700;900&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl tracking-tight font-black uppercase",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-bold",
+      "h3": "text-xl font-bold",
+      "body": "text-base leading-relaxed",
+      "labels": "text-xs tracking-[0.2em] uppercase font-mono text-muted-foreground",
+      "data_points": "text-sm font-mono text-primary"
+    },
+    "rules": [
+      "NEVER use Inter, Roboto, or Open Sans for headings.",
+      "Use IBM Plex Mono for all ATA citations, serial numbers, part numbers, and logbook entries.",
+      "Labels and overlines MUST be uppercase with wide tracking (tracking-[0.2em]).",
+      "Heading hierarchy gap must not exceed 2 Tailwind steps."
+    ]
+  },
+  "colors": {
+    "background": "#050505",
+    "foreground": "#FFFFFF",
+    "primary": {
+      "DEFAULT": "#007AFF",
+      "foreground": "#FFFFFF",
+      "description": "Aviation Blue for primary actions and trusted pathways."
+    },
+    "accent": {
+      "DEFAULT": "#FF4F00",
+      "foreground": "#FFFFFF",
+      "description": "Signal Orange for warnings, mechanical alerts, and decision points."
+    },
+    "surface": {
+      "panel": "#0A0A0A",
+      "border": "#262626"
+    },
+    "rules": [
+      "No full-screen gradients. Use matte colors and solid backgrounds.",
+      "Never use pure black or pure white without intention. The background is tinted very slightly.",
+      "Interactive elements must have at least a 4.5:1 contrast ratio against their background."
+    ]
+  },
+  "layouts": {
+    "architecture": "Chat + Workbench (Claude Pattern)",
+    "structure": [
+      "Left: Collapsible sleek Sidebar for Logbook, History, and Manuals.",
+      "Center: Primary Troubleshooting Chat Interface. Mechanic-first text responses with sequential steps.",
+      "Right: Dynamic Workbench/Reference Panel for displaying ATA manual excerpts, PDF views, and citations."
+    ],
+    "spacing": [
+      "Use massive spacing (p-8 to p-12) around major containers.",
+      "Tight, dense spacing (gap-2, p-3) inside data tables and logbook entries.",
+      "Never center-align dense text or mechanical steps. Always left-align."
+    ],
+    "grid_bento": "Use Mode B (High Density) for the Aircraft Profile Dashboard and Logbook statistics. 1px borders (border-border), no rounded corners, no soft shadows."
+  },
+  "visual_enhancers": {
+    "surfaces": [
+      "Use 'Grid Borders' (The Technical Look) for the main layout divisions.",
+      "Use 'Solid Flat' surfaces for chat bubbles and reference cards. NO Glassmorphism (it reduces data legibility)."
+    ],
+    "borders_and_radius": [
+      "Global radius is 0px (Sharp). Use rounded-none everywhere.",
+      "Borders are 1px solid border-white/10."
+    ]
+  },
+  "components": {
+    "chat_message": {
+      "style": "Flat box, left aligned, subtle left border for AI responses (border-l-4 border-l-primary).",
+      "content": "Mechanic-first structure: One sentence likely cause -> numbered steps -> decision points."
+    },
+    "ata_citation": {
+      "style": "Inline tag, font-mono, bg-white/5 border border-white/20 px-2 py-0.5 text-xs text-blue-400 hover:bg-white/10 transition-colors cursor-pointer."
+    },
+    "aircraft_profile": {
+      "style": "Bento grid header, showing Make, Model, Year, S/N, Config in mono font with dense data spacing."
+    },
+    "pdf_viewer": {
+      "style": "Embedded right-panel iframe/canvas with technical overlay."
+    }
+  },
+  "motion": {
+    "rules": [
+      "Minimalist and crisp.",
+      "Hover states must visibly increase contrast (e.g., hover:bg-white/10).",
+      "List items (troubleshooting steps) should stagger in quickly.",
+      "Disable transforms for generic 'transition-all'."
+    ]
+  },
+  "accessibility": {
+    "rules": [
+      "All interactive elements MUST include data-testid.",
+      "Ensure strong focus states (e.g., focus:ring-2 focus:ring-accent).",
+      "Do not rely on color alone to indicate status. Use icons + text."
+    ]
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1691394045643-aafd8e17deab?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwxfHxjZXNzbmElMjBhaXJjcmFmdHxlbnwwfHx8fDE3ODY4NjQ0MDB8MA&ixlib=rb-4.1.0&q=85",
+        "category": "aircraft_profile_header",
+        "description": "Cessna aircraft in flight. Use as an understated, low-opacity (10-20%) background header in the Aircraft Profile section."
+      }
+    ],
+    "icons": {
+      "library": "phosphor-icons/react",
+      "instruction": "Use Phosphor Icons (duotone or regular) for sharp, technical look."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Install dependencies: yarn add @phosphor-icons/react sonner",
+    "Update tailwind.config.js to set radius to 0, and use the custom color palette (background: #050505, border: #262626).",
+    "Implement a 3-pane layout (Sidebar | Chat | Workbench) similar to Claude's artifact UI.",
+    "Do not use generic Shadcn cards with rounded corners. Override all shadcn primitive radii to 'rounded-none' and use flat 1px borders.",
+    "Ensure all technical data (ATA codes, Part Numbers) uses the IBM Plex Mono font.",
+    "For the AI Chat, present the response structurally: Start with a bold heading for the most likely cause, followed by an ordered list for troubleshooting steps."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You MUST NOT apply universal transitions (e.g., transition: all). Add transitions to specific properties only.",
+    "You MUST NOT center align the app container. Text alignment should prioritize reading flow (left-aligned).",
+    "DO NOT use dark colors as gradients.",
+    "Never use AI assistant Emoji characters (🤖🧠💡) for icons. Use proper SVG icons.",
+    "Every interaction needs micro-animations (hover states, focus rings).",
+    "All interactive elements MUST include a data-testid attribute in kebab-case."
+  ]
+}

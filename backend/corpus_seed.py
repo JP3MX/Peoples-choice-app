@@ -1,0 +1,116 @@
+"""Seed data for the historical maintenance reference corpus and starter aircraft profiles."""
+
+HISTORICAL_RECORDS = [
+    {
+        "make": "Cessna", "model": "172", "engine": "Lycoming O-360",
+        "ata": "74-00-00", "system": "Ignition",
+        "symptom": "Engine runs rough during runup, RPM drop exceeds limits on right magneto",
+        "likely_cause": "Fouled bottom spark plugs from excessive ground idle / rich mixture",
+        "resolution": "Removed and cleaned lower spark plugs, gapped to spec, performed lean aggressive runup; RPM drop returned to within limits.",
+        "keywords": ["mag drop", "rough", "runup", "rpm drop", "magneto", "spark plug", "fouled", "ignition"],
+    },
+    {
+        "make": "Cessna", "model": "172", "engine": "Lycoming IO-360",
+        "ata": "73-00-00", "system": "Fuel/Engine Control",
+        "symptom": "Hot start difficulty, engine floods and will not catch when warm",
+        "likely_cause": "Vapor lock / fuel percolation in the fuel servo and lines after hot soak",
+        "resolution": "Applied hot-start procedure (mixture idle cutoff, throttle cracked, boost pump purge), confirmed fuel pressure stabilized. Verified no fuel line chafing near exhaust.",
+        "keywords": ["hot start", "flood", "no start", "vapor lock", "fuel", "warm", "wont start"],
+    },
+    {
+        "make": "Cessna", "model": "152", "engine": "Lycoming O-320",
+        "ata": "24-30-00", "system": "Electrical Power",
+        "symptom": "Low voltage light illuminates in flight, ammeter shows discharge",
+        "likely_cause": "Failed voltage regulator or worn alternator brushes",
+        "resolution": "Bench-tested alternator OK, replaced voltage regulator, verified charging at 14.0-14.4V across RPM range.",
+        "keywords": ["low voltage", "ammeter", "discharge", "alternator", "voltage regulator", "charging", "electrical"],
+    },
+    {
+        "make": "Cessna", "model": "182", "engine": "Continental O-470",
+        "ata": "32-40-00", "system": "Landing Gear / Brakes",
+        "symptom": "Spongy brake pedal, aircraft pulls to one side on braking",
+        "likely_cause": "Air in brake line or worn brake linings on one main",
+        "resolution": "Bled brake system, replaced worn linings, checked O-rings in master cylinder. Firm pedal restored.",
+        "keywords": ["brake", "spongy", "pull", "pedal", "bleed", "linings", "hydraulic"],
+    },
+    {
+        "make": "Piper", "model": "PA-28", "engine": "Lycoming O-360",
+        "ata": "76-00-00", "system": "Engine Controls",
+        "symptom": "Throttle sticks / stiff throttle movement in the cockpit",
+        "likely_cause": "Dry or corroded throttle cable / control worn bushings at carb arm",
+        "resolution": "Lubricated throttle cable, replaced worn rod-end bearing at carburetor arm, rigged to full travel stops.",
+        "keywords": ["throttle", "stiff", "stuck", "cable", "control", "rigging"],
+    },
+    {
+        "make": "Piper", "model": "PA-28", "engine": "Lycoming O-320",
+        "ata": "73-10-00", "system": "Fuel Metering",
+        "symptom": "Engine surges at cruise, fuel flow fluctuates",
+        "likely_cause": "Contaminated carburetor / partially blocked main jet or water in fuel",
+        "resolution": "Sumped fuel (found water), cleaned carburetor bowl and jets, replaced fuel gascolator screen.",
+        "keywords": ["surge", "fuel flow", "cruise", "carburetor", "water", "contamination", "rough"],
+    },
+    {
+        "make": "Piper", "model": "PA-34", "engine": "Continental TSIO-360",
+        "ata": "80-00-00", "system": "Starting",
+        "symptom": "Left engine starter engages but does not crank, clicking only",
+        "likely_cause": "Weak battery, corroded starter ground, or failed starter solenoid",
+        "resolution": "Cleaned and torqued ground straps, load-tested battery (weak, replaced), verified solenoid operation.",
+        "keywords": ["starter", "crank", "click", "no crank", "solenoid", "battery", "ground"],
+    },
+    {
+        "make": "Piper", "model": "PA-44", "engine": "Lycoming O-360",
+        "ata": "61-00-00", "system": "Propeller",
+        "symptom": "Propeller will not feather smoothly during single-engine drill",
+        "likely_cause": "Sluggish governor or low nitrogen charge in prop dome",
+        "resolution": "Checked and recharged prop accumulator/dome nitrogen, serviced governor, verified feather time within limits.",
+        "keywords": ["propeller", "feather", "governor", "prop", "nitrogen", "constant speed"],
+    },
+    {
+        "make": "Rotax", "model": "912", "engine": "Rotax 912 ULS",
+        "ata": "79-00-00", "system": "Oil",
+        "symptom": "No oil pressure rise on start, oil temperature slow to climb",
+        "likely_cause": "Oil tank not burped / air lock in dry-sump system",
+        "resolution": "Performed Rotax oil burping procedure until gurgle heard, rechecked oil level, pressure normalized on next start.",
+        "keywords": ["oil pressure", "oil", "burp", "rotax", "dry sump", "no pressure", "912"],
+    },
+    {
+        "make": "Rotax", "model": "912", "engine": "Rotax 912 ULS",
+        "ata": "74-00-00", "system": "Ignition",
+        "symptom": "Rotax 912 rpm drop high on one ignition circuit during runup",
+        "likely_cause": "Faulty ignition module or fouled plug on that circuit",
+        "resolution": "Swapped ignition module lead to isolate, found weak module coil, replaced module; also cleaned plugs.",
+        "keywords": ["rotax", "912", "ignition", "rpm drop", "runup", "module", "mag", "rough"],
+    },
+    {
+        "make": "Lycoming", "model": "IO-360", "engine": "Lycoming IO-360",
+        "ata": "77-00-00", "system": "Engine Indicating",
+        "symptom": "One cylinder EGT reads much higher than others at cruise",
+        "likely_cause": "Lean cylinder due to intake air leak or clogged injector nozzle",
+        "resolution": "Cleaned fuel injector nozzles (ultrasonic), inspected intake tube seals; EGT spread normalized.",
+        "keywords": ["egt", "cylinder", "lean", "injector", "nozzle", "intake leak", "high egt"],
+    },
+    {
+        "make": "Lycoming", "model": "O-320", "engine": "Lycoming O-320",
+        "ata": "72-00-00", "system": "Engine (Reciprocating)",
+        "symptom": "High oil consumption, blue smoke on start",
+        "likely_cause": "Worn valve guides / stuck oil control rings",
+        "resolution": "Performed differential compression, found low on two cylinders past exhaust valve; top overhaul of affected cylinders.",
+        "keywords": ["oil consumption", "smoke", "compression", "rings", "valve guide", "burning oil"],
+    },
+]
+
+# Starter aircraft profiles (unconfirmed demo units the mechanic can select/edit)
+STARTER_AIRCRAFT = [
+    {
+        "tail_number": "N172SK",
+        "make": "Cessna", "model": "172N", "year": "1978",
+        "serial_number": "17271000", "configuration": "Lycoming O-320-H2AD, fixed gear, 4-seat trainer",
+        "confirmed": False,
+    },
+    {
+        "tail_number": "N28PA",
+        "make": "Piper", "model": "PA-28-181 Archer", "year": "1998",
+        "serial_number": "2843200", "configuration": "Lycoming O-360-A4M, fixed gear",
+        "confirmed": False,
+    },
+]

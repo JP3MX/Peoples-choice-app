@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@300;400;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: "IBM Plex Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 2%;
+        --foreground: 0 0% 100%;
+        --card: 0 0% 4%;
+        --card-foreground: 0 0% 100%;
+        --popover: 0 0% 4%;
+        --popover-foreground: 0 0% 100%;
+        --primary: 211 100% 50%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 10%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 0 0% 10%;
+        --muted-foreground: 0 0% 60%;
+        --accent: 19 100% 50%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84% 55%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 0 0% 15%;
+        --input: 0 0% 15%;
+        --ring: 19 100% 50%;
+        --radius: 0px;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+    ::selection {
+        background: hsl(19 100% 50%);
+        color: #fff;
+    }
+}
+
+.font-mono { font-family: "IBM Plex Mono", monospace; }
+.font-head { font-family: "Chivo", sans-serif; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #050505; }
+::-webkit-scrollbar-thumb { background: #262626; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+/* Grid texture backdrop */
+.grid-bg {
+    background-image:
+        linear-gradient(hsl(0 0% 15% / 0.4) 1px, transparent 1px),
+        linear-gradient(90deg, hsl(0 0% 15% / 0.4) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+@keyframes step-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-step-in { animation: step-in 0.35s ease-out both; }
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.cursor-blink { animation: blink 1s step-end infinite; }
+
+/* Markdown prose */
+.mkd h1, .mkd h2, .mkd h3 { font-family: "Chivo", sans-serif; font-weight: 700; margin: 0.6em 0 0.3em; }
+.mkd h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.mkd p { margin: 0.5em 0; line-height: 1.6; }
+.mkd ol { list-style: decimal; padding-left: 1.4em; margin: 0.5em 0; }
+.mkd ul { list-style: disc; padding-left: 1.4em; margin: 0.5em 0; }
+.mkd li { margin: 0.35em 0; line-height: 1.55; }
+.mkd strong { color: #fff; font-weight: 600; }
+.mkd code { font-family: "IBM Plex Mono", monospace; background: hsl(0 0% 12%); padding: 0.1em 0.4em; font-size: 0.85em; }
+.mkd a { color: hsl(211 100% 60%); }
+.ata-cite {
+    font-family: "IBM Plex Mono", monospace;
+    background: hsl(211 100% 50% / 0.12);
+    border: 1px solid hsl(211 100% 55% / 0.4);
+    color: hsl(211 100% 68%);
+    padding: 0.05em 0.4em;
+    font-size: 0.82em;
+    white-space: nowrap;
+}

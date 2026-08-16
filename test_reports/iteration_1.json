@@ -1,0 +1,43 @@
+{
+  "summary": "First-run E2E of Squawk King IA (backend + frontend). All 11 backend regression tests pass (auth, seeded aircraft, corpus=12, sessions, logbook, PDF manual upload+pypdf extraction with page_count>=1, and GPT-5.4 SSE chat stream returning 2361 chars of real mechanic-first output). Frontend E2E verified: login, register-new-user, 3-pane workspace, seeded aircraft (N172SK, N28PA) in selector, new session, SSE chat streaming token-by-token, assistant message persistence after reload, corpus/Matched-History block on unconfirmed session, applicability-status flips Preliminary→Confirmed, aircraft confirm-with-empty-fields validation toast, History tab (12 records + magneto filter → 1), Logbook add+list, Manuals tab renders upload UI. AI primary feature - pass. skills loaded: ai-testing-core, ai-testing-llm.",
+  "ai_feature_verdicts": [
+    "primary: GPT-5.4 mechanic-first chat stream via /api/sessions/{id}/message - pass - evidence: backend pytest test_chat_stream_mechanic_first returned events=[meta, delta..., done], stream text = 2361 chars containing 'magneto/ignition' keywords, and UI captured assistant excerpt: 'The most likely cause is fouled spark plugs on the right magneto circuit...' with numbered steps 1-5 and 'Matched History' corpus block - skill: ai-testing-llm",
+    "PDF manual extraction (Emergent Object Storage + pypdf) via POST /api/manuals - pass - evidence: uploaded synthesized PDF containing 'MAGNETO TIMING CHECK ATA 74-00-00 SQUAWK', backend returned page_count>=1 (extracted_chars>0), 200 OK - skill: n/a (deterministic library)"
+  ],
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Workbench top tab bar", "issues": ["When multiple sonner toasts stack in the top-right after Confirm Applicability, they can overlap the Workbench tab header (Aircraft/Manuals/History/Logbook), briefly blocking tab clicks. Non-blocking but a UX polish opportunity: shift toaster offset or shorten toast duration."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:293 download endpoint accepts JWT via ?auth= query param (used for window.open of the PDF). Acceptable for MVP, but the token ends up in browser history / server access logs; consider using a short-lived signed download URL or streaming via fetch with Authorization header instead.",
+    "server.py:302 download endpoint decodes JWT but does not verify user_id ownership vs record.user_id — any authenticated user can download any other user's manual by knowing/guessing the manual id (UUID mitigates but this is still an authz gap).",
+    "server.py:582 startup rehashes admin password when the plaintext no longer matches the stored bcrypt hash — good, but this also silently 'fixes' an admin password change made through the DB. Fine for MVP.",
+    "server.py:598 init_storage() is called at startup and swallows exceptions with a log; put_object re-initializes on 404 which is a reasonable retry path.",
+    "corpus_seed HISTORICAL_RECORDS + STARTER_AIRCRAFT are only seeded when respective collections are EMPTY — this is idempotent-safe; documented.",
+    "ChatPanel.jsx:87 fetch call for SSE does not check res.ok before calling res.body.getReader(); if backend returns 401/500 the reader will still be constructed but yield no data. Add a res.ok check to surface a proper error toast."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/iteration_1.json",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all critical flows verified: login, register, seeded aircraft, chat streaming, persistence, applicability confirm, corpus block, history/search, logbook add, manuals tab)"},
+  "test_credentials": "mechanic@squawkking.io / squawk123 (JWT Bearer, token stored in localStorage sk_token)",
+  "seed_data_creation": "Backend seeds 12 historical corpus records + 2 starter aircraft (N172SK Cessna 172N, N28PA Piper PA-28-181) for admin user on startup. Test run also created ephemeral TEST_ sessions/logbook entries/manuals which are cleaned up by tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/backend_test.py and run via `cd /app && REACT_APP_BACKEND_URL=<url> python -m pytest backend/tests/backend_test.py`. The synthesized tiny-PDF helper in _tiny_pdf_bytes() produces a pypdf-parseable file. GPT-5.4 stream typically completes in <15s. Sonner toasts in top-right can occasionally intercept clicks on Workbench tabs; wait 1.5-2s after aircraft confirm/set actions before switching tabs in Playwright.",
+  "rca of the issue": "N/A — no blocking issues found."
+}
