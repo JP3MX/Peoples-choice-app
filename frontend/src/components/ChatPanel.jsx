@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Send, Plane, AlertTriangle, FileText, History, ShieldCheck, Wrench } from "lucide-react";
-import { API, getToken } from "@/lib/api";
+import { Send, Plane, AlertTriangle, FileText, History, ShieldCheck, Wrench, Cpu, ChevronDown } from "lucide-react";
+import { api, API, getToken } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 
 const STOP_MESSAGE =
@@ -50,13 +50,29 @@ function CorpusRow({ corpus }) {
   );
 }
 
-export default function ChatPanel({ session, aircraft, onCitations }) {
+export default function ChatPanel({ session, aircraft, onCitations, onSessionUpdate }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
   const [streamMeta, setStreamMeta] = useState(null);
+  const [models, setModels] = useState([]);
+  const [modelMenu, setModelMenu] = useState(false);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    api.get("/models").then((r) => setModels(r.data.models || []));
+  }, []);
+
+  const currentModel = session?.model || "gpt-5.4";
+  const currentLabel = models.find((m) => m.id === currentModel)?.label || currentModel;
+
+  const changeModel = async (id) => {
+    setModelMenu(false);
+    if (!session || id === currentModel) return;
+    const { data } = await api.put(`/sessions/${session.id}`, { model: id, title: session.title });
+    onSessionUpdate?.(data);
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -150,16 +166,51 @@ export default function ChatPanel({ session, aircraft, onCitations }) {
             </p>
           </div>
         </div>
-        <div
-          className={`font-mono text-[10px] tracking-widest uppercase px-2 py-1 border flex items-center gap-1.5 shrink-0 ${
-            isConfirmed
-              ? "border-primary/50 bg-primary/10 text-primary"
-              : "border-accent/50 bg-accent/10 text-accent"
-          }`}
-          data-testid="applicability-status"
-        >
-          {isConfirmed ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-          {isConfirmed ? "Applicability Confirmed" : "Preliminary Only"}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* model selector */}
+          <div className="relative">
+            <button
+              data-testid="model-selector"
+              onClick={() => setModelMenu(!modelMenu)}
+              className="font-mono text-[10px] tracking-widest uppercase px-2 py-1 border border-border bg-secondary/40 flex items-center gap-1.5 hover:border-white/25 transition-colors text-foreground/80"
+              title="ChatGPT model powering this session"
+            >
+              <Cpu className="h-3 w-3 text-primary" />
+              {currentLabel}
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {modelMenu && (
+              <div className="absolute right-0 mt-1 z-30 w-56 bg-card border border-border shadow-xl" data-testid="model-menu">
+                <p className="font-mono text-[9px] tracking-[0.2em] uppercase text-muted-foreground px-3 py-2 border-b border-border">
+                  OpenAI ChatGPT Models
+                </p>
+                {models.map((m) => (
+                  <button
+                    key={m.id}
+                    data-testid={`model-option-${m.id}`}
+                    onClick={() => changeModel(m.id)}
+                    className={`w-full text-left px-3 py-2 border-b border-border last:border-0 hover:bg-secondary transition-colors ${
+                      m.id === currentModel ? "bg-primary/10" : ""
+                    }`}
+                  >
+                    <span className={`font-mono text-xs ${m.id === currentModel ? "text-primary" : "text-foreground"}`}>{m.label}</span>
+                    <span className="block text-[10px] text-muted-foreground">{m.note}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div
+            className={`font-mono text-[10px] tracking-widest uppercase px-2 py-1 border flex items-center gap-1.5 ${
+              isConfirmed
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-accent/50 bg-accent/10 text-accent"
+            }`}
+            data-testid="applicability-status"
+          >
+            {isConfirmed ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+            {isConfirmed ? "Applicability Confirmed" : "Preliminary Only"}
+          </div>
         </div>
       </div>
 

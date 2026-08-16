@@ -42,6 +42,20 @@ STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 
 STOP_MESSAGE = "Approved maintenance data required. Please provide or upload the applicable manual before continuing."
 
+# OpenAI ChatGPT models selectable per session (label -> model id)
+OPENAI_MODELS = [
+    {"id": "gpt-5.4", "label": "GPT-5.4", "note": "Recommended — balanced reasoning"},
+    {"id": "gpt-5.4-mini", "label": "GPT-5.4 Mini", "note": "Faster, lighter"},
+    {"id": "gpt-5.5", "label": "GPT-5.5", "note": "Higher capability"},
+    {"id": "gpt-5.6-terra", "label": "GPT-5.6 Terra", "note": "Latest flagship"},
+    {"id": "gpt-5", "label": "GPT-5", "note": "General purpose"},
+    {"id": "gpt-4.1", "label": "GPT-4.1", "note": "Legacy, reliable"},
+    {"id": "gpt-4o", "label": "GPT-4o", "note": "Legacy omni"},
+    {"id": "o3", "label": "o3", "note": "Deep reasoning"},
+]
+ALLOWED_MODEL_IDS = {m["id"] for m in OPENAI_MODELS}
+DEFAULT_MODEL = "gpt-5.4"
+
 app = FastAPI(title="Squawk King IA")
 api_router = APIRouter(prefix="/api")
 
@@ -150,6 +164,7 @@ class LogbookInput(BaseModel):
 class SessionInput(BaseModel):
     title: Optional[str] = "New Troubleshooting Session"
     aircraft_id: Optional[str] = None
+    model: Optional[str] = None
 
 class MessageInput(BaseModel):
     text: str
@@ -398,10 +413,15 @@ async def list_sessions(user: dict = Depends(get_current_user)):
     items = await db.sessions.find({"user_id": user["id"]}, {"_id": 0}).sort("updated_at", -1).to_list(200)
     return items
 
+@api_router.get("/models")
+async def list_models(user: dict = Depends(get_current_user)):
+    return {"models": OPENAI_MODELS, "default": DEFAULT_MODEL}
+
 @api_router.post("/sessions")
 async def create_session(payload: SessionInput, user: dict = Depends(get_current_user)):
+    model = payload.model if payload.model in ALLOWED_MODEL_IDS else DEFAULT_MODEL
     doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "title": payload.title,
-           "aircraft_id": payload.aircraft_id,
+           "aircraft_id": payload.aircraft_id, "model": model,
            "created_at": datetime.now(timezone.utc).isoformat(),
            "updated_at": datetime.now(timezone.utc).isoformat()}
     await db.sessions.insert_one(dict(doc))
@@ -410,6 +430,8 @@ async def create_session(payload: SessionInput, user: dict = Depends(get_current
 @api_router.put("/sessions/{session_id}")
 async def update_session(session_id: str, payload: SessionInput, user: dict = Depends(get_current_user)):
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if "model" in updates and updates["model"] not in ALLOWED_MODEL_IDS:
+        updates.pop("model")
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.sessions.update_one({"id": session_id, "user_id": user["id"]}, {"$set": updates})
     doc = await db.sessions.find_one({"id": session_id}, {"_id": 0})
@@ -532,11 +554,14 @@ async def stream_chat(session_id: str, user: dict, text: str):
     citations = [{"doc_name": h["doc_name"], "ata": h.get("ata"), "page": h["page"],
                   "status": h.get("status"), "doc_type": h.get("doc_type")} for h in manual_hits]
 
-    chat = LlmChat(api_key=EMERGENT_KEY, session_id=session_id, system_message=system_prompt).with_model("openai", "gpt-5.4")
+    chat = LlmChat(api_key=EMERGENT_KEY, session_id=session_id, system_message=system_prompt)
+    model = session.get("model") if session.get("model") in ALLOWED_MODEL_IDS else DEFAULT_MODEL
+    chat.with_model("openai", model)
 
     async def gen():
         full = ""
         meta = {"citations": citations,
+                "model": model,
                 "corpus": [{"make": r["make"], "model": r["model"], "ata": r.get("ata"),
                             "symptom": r["symptom"], "likely_cause": r["likely_cause"]} for r in corpus_hits]}
         yield f"data: {json.dumps({'type': 'meta', 'meta': meta})}\n\n"

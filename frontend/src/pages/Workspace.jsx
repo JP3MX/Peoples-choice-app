@@ -173,7 +173,14 @@ export default function Workspace() {
           {showWorkbench ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
         </button>
         {activeSession ? (
-          <ChatPanel session={activeSession} aircraft={activeAircraft} />
+          <ChatPanel
+            session={activeSession}
+            aircraft={activeAircraft}
+            onSessionUpdate={(s) => {
+              setActiveSession(s);
+              setSessions((list) => list.map((x) => (x.id === s.id ? s : x)));
+            }}
+          />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
             <Plane className="h-10 w-10 text-accent mb-4" />
