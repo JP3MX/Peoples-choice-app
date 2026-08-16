@@ -9,6 +9,7 @@ import io
 import re
 import uuid
 import json
+import secrets
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
@@ -198,6 +199,62 @@ async def login(payload: LoginInput):
 @api_router.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return user
+
+RESET_CODE_TTL_MIN = 15
+
+class ForgotInput(BaseModel):
+    email: EmailStr
+
+class ResetInput(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+class ChangePwInput(BaseModel):
+    current_password: str
+    new_password: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotInput):
+    email = payload.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that email")
+    code = f"{secrets.randbelow(1000000):06d}"
+    expires = datetime.now(timezone.utc) + timedelta(minutes=RESET_CODE_TTL_MIN)
+    await db.password_reset_tokens.delete_many({"email": email})
+    await db.password_reset_tokens.insert_one({
+        "email": email, "code": code, "expires_at": expires.isoformat(),
+        "used": False, "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    logger.info(f"[password-reset] code for {email}: {code}")
+    return {"email": email, "code": code, "expires_in_minutes": RESET_CODE_TTL_MIN,
+            "message": "Enter this code with a new password to reset."}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(payload: ResetInput):
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    email = payload.email.lower()
+    rec = await db.password_reset_tokens.find_one({"email": email, "code": payload.code.strip()})
+    if not rec or rec.get("used"):
+        raise HTTPException(status_code=400, detail="Invalid or already-used reset code")
+    if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Reset code expired. Request a new one.")
+    await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(payload.new_password)}})
+    await db.password_reset_tokens.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+    return {"ok": True, "message": "Password updated. You can now sign in."}
+
+@api_router.post("/auth/change-password")
+async def change_password(payload: ChangePwInput, user: dict = Depends(get_current_user)):
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    dbuser = await db.users.find_one({"email": user["email"]})
+    if not verify_password(payload.current_password, dbuser["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    await db.users.update_one({"email": user["email"]},
+                              {"$set": {"password_hash": hash_password(payload.new_password)}})
+    return {"ok": True, "message": "Password changed successfully"}
 
 # ---------------------------------------------------------------------------
 # Aircraft routes
@@ -660,6 +717,7 @@ async def send_message(session_id: str, payload: MessageInput, user: dict = Depe
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    await db.password_reset_tokens.create_index("expires_at")
     admin_email = os.environ.get("ADMIN_EMAIL", "mechanic@squawkking.io")
     admin_password = os.environ.get("ADMIN_PASSWORD", "squawk123")
     existing = await db.users.find_one({"email": admin_email})

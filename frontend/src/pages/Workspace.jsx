@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen,
+  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen, KeyRound,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import ChatPanel from "@/components/ChatPanel";
 import Workbench from "@/components/Workbench";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 
 export default function Workspace() {
   const { user, logout } = useAuth();
@@ -15,6 +16,7 @@ export default function Workspace() {
   const [aircraftList, setAircraftList] = useState([]);
   const [showWorkbench, setShowWorkbench] = useState(true);
   const [acMenu, setAcMenu] = useState(false);
+  const [showChangePw, setShowChangePw] = useState(false);
 
   const activeAircraft = aircraftList.find((a) => a.id === activeSession?.aircraft_id) || null;
 
@@ -157,9 +159,14 @@ export default function Workspace() {
             <p className="text-xs font-medium truncate">{user?.name}</p>
             <p className="font-mono text-[10px] text-muted-foreground truncate">{user?.email}</p>
           </div>
-          <button data-testid="logout-btn" onClick={logout} className="text-muted-foreground hover:text-accent transition-colors">
-            <LogOut className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button data-testid="change-password-btn" onClick={() => setShowChangePw(true)} title="Change password" className="text-muted-foreground hover:text-primary transition-colors p-1">
+              <KeyRound className="h-4 w-4" />
+            </button>
+            <button data-testid="logout-btn" onClick={logout} title="Sign out" className="text-muted-foreground hover:text-accent transition-colors p-1">
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -199,6 +206,8 @@ export default function Workspace() {
           <Workbench aircraft={activeAircraft} onAircraftSaved={onAircraftSaved} />
         </section>
       )}
+
+      <ChangePasswordModal open={showChangePw} onClose={() => setShowChangePw(false)} />
     </div>
   );
 }

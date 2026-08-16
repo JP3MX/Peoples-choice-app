@@ -5,30 +5,65 @@ import { api, formatApiErrorDetail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Login() {
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState("login"); // login | register | forgot | reset
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [info, setInfo] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const switchMode = (m) => {
+    setMode(m);
+    setError("");
+    setInfo("");
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+    setInfo("");
     setLoading(true);
     try {
-      const path = mode === "login" ? "/auth/login" : "/auth/register";
-      const body = mode === "login" ? { email, password } : { email, password, name };
-      const { data } = await api.post(path, body);
-      login(data.token, data.user);
-      navigate("/");
+      if (mode === "login" || mode === "register") {
+        const path = mode === "login" ? "/auth/login" : "/auth/register";
+        const body = mode === "login" ? { email, password } : { email, password, name };
+        const { data } = await api.post(path, body);
+        login(data.token, data.user);
+        navigate("/");
+      } else if (mode === "forgot") {
+        const { data } = await api.post("/auth/forgot-password", { email });
+        setCode(data.code);
+        setInfo(`Reset code generated. Valid for ${data.expires_in_minutes} minutes.`);
+        setPassword("");
+        setMode("reset");
+      } else if (mode === "reset") {
+        await api.post("/auth/reset-password", { email, code, new_password: password });
+        setInfo("Password updated. Sign in with your new password.");
+        setPassword("");
+        setMode("login");
+      }
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const headers = {
+    login: ["Access Hangar", "Sign in to your bay"],
+    register: ["New Mechanic", "Create your account"],
+    forgot: ["Reset Access", "Forgot your password?"],
+    reset: ["Reset Access", "Set a new password"],
+  };
+  const submitLabels = {
+    login: "Sign In",
+    register: "Create Account",
+    forgot: "Get Reset Code",
+    reset: "Update Password",
   };
 
   return (
@@ -67,11 +102,9 @@ export default function Login() {
           </div>
 
           <p className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground mb-2">
-            {mode === "login" ? "Access Hangar" : "New Mechanic"}
+            {headers[mode][0]}
           </p>
-          <h2 className="font-head font-bold text-2xl mb-8">
-            {mode === "login" ? "Sign in to your bay" : "Create your account"}
-          </h2>
+          <h2 className="font-head font-bold text-2xl mb-8">{headers[mode][1]}</h2>
 
           {mode === "register" && (
             <div className="mb-4">
@@ -86,32 +119,77 @@ export default function Login() {
             </div>
           )}
 
-          <div className="mb-4">
-            <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">Email</label>
-            <input
-              data-testid="email-input"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono"
-              placeholder="mechanic@squawkking.io"
-            />
-          </div>
+          {(mode === "login" || mode === "register" || mode === "forgot" || mode === "reset") && (
+            <div className="mb-4">
+              <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">Email</label>
+              <input
+                data-testid="email-input"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={mode === "reset"}
+                className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono disabled:opacity-60"
+                placeholder="mechanic@squawkking.io"
+              />
+            </div>
+          )}
 
-          <div className="mb-6">
-            <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">Password</label>
-            <input
-              data-testid="password-input"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono"
-              placeholder="••••••••"
-            />
-          </div>
+          {mode === "reset" && (
+            <>
+              {code && (
+                <div data-testid="reset-code-display" className="mb-4 border border-primary/40 bg-primary/10 px-3 py-2.5">
+                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">Your reset code</p>
+                  <p className="font-mono text-2xl tracking-[0.4em] text-primary mt-1">{code}</p>
+                </div>
+              )}
+              <div className="mb-4">
+                <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">Reset Code</label>
+                <input
+                  data-testid="reset-code-input"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono tracking-[0.3em]"
+                  placeholder="6-digit code"
+                />
+              </div>
+            </>
+          )}
 
+          {(mode === "login" || mode === "register" || mode === "reset") && (
+            <div className="mb-2">
+              <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">
+                {mode === "reset" ? "New Password" : "Password"}
+              </label>
+              <input
+                data-testid="password-input"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono"
+                placeholder="••••••••"
+              />
+            </div>
+          )}
+
+          {mode === "login" && (
+            <button
+              type="button"
+              data-testid="forgot-link"
+              onClick={() => switchMode("forgot")}
+              className="text-xs text-primary hover:underline mb-6 block"
+            >
+              Forgot password?
+            </button>
+          )}
+          {mode !== "login" && <div className="mb-6" />}
+
+          {info && (
+            <div data-testid="auth-info" className="mb-4 border border-primary/40 bg-primary/5 px-3 py-2 text-sm text-primary">
+              {info}
+            </div>
+          )}
           {error && (
             <div data-testid="auth-error" className="mb-4 border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
               {error}
@@ -124,21 +202,25 @@ export default function Login() {
             disabled={loading}
             className="w-full bg-accent text-white font-mono text-sm tracking-[0.15em] uppercase py-3 flex items-center justify-center gap-2 hover:bg-accent/90 transition-colors disabled:opacity-50"
           >
-            {loading ? "Working…" : mode === "login" ? "Sign In" : "Create Account"}
+            {loading ? "Working…" : submitLabels[mode]}
             {!loading && <ArrowRight className="h-4 w-4" />}
           </button>
 
-          <button
-            type="button"
-            data-testid="auth-toggle"
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
-              setError("");
-            }}
-            className="w-full mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {mode === "login" ? "No account? Register a mechanic" : "Already registered? Sign in"}
-          </button>
+          {mode === "login" && (
+            <button type="button" data-testid="auth-toggle" onClick={() => switchMode("register")} className="w-full mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              No account? Register a mechanic
+            </button>
+          )}
+          {mode === "register" && (
+            <button type="button" data-testid="auth-toggle" onClick={() => switchMode("login")} className="w-full mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Already registered? Sign in
+            </button>
+          )}
+          {(mode === "forgot" || mode === "reset") && (
+            <button type="button" data-testid="back-to-login" onClick={() => switchMode("login")} className="w-full mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Back to sign in
+            </button>
+          )}
 
           <div className="mt-8 border border-border bg-secondary/40 p-3 flex items-start gap-2">
             <Wrench className="h-4 w-4 text-primary mt-0.5 shrink-0" />
