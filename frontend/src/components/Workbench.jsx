@@ -2,13 +2,14 @@ import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Plane, Upload, FileText, History, BookOpen, Trash2, CheckCircle2,
-  Circle, ExternalLink, Plus, ClipboardList,
+  Circle, ExternalLink, Plus, ClipboardList, Image as ImageIcon, Camera, File as FileIcon,
 } from "lucide-react";
 import { api, API, getToken } from "@/lib/api";
 
 const TABS = [
   { id: "aircraft", label: "Aircraft", icon: Plane },
   { id: "manuals", label: "Manuals", icon: FileText },
+  { id: "media", label: "Media", icon: Camera },
   { id: "history", label: "History", icon: History },
   { id: "logbook", label: "Logbook", icon: BookOpen },
 ];
@@ -270,6 +271,135 @@ function LogbookTab({ aircraft }) {
   );
 }
 
+function MediaThumb({ item }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let revoke;
+    if (item.kind === "image") {
+      fetch(`${API}/media/${item.id}/download`, { headers: { Authorization: `Bearer ${getToken()}` } })
+        .then((r) => {
+          if (!r.ok) throw new Error("download failed");
+          return r.blob();
+        })
+        .then((b) => {
+          revoke = URL.createObjectURL(b);
+          setUrl(revoke);
+        })
+        .catch(() => setUrl("error"));
+    }
+    return () => revoke && URL.revokeObjectURL(revoke);
+  }, [item.id, item.kind]);
+
+  if (item.kind === "image" && url === "error")
+    return (
+      <div className="w-full h-28 bg-secondary flex items-center justify-center">
+        <ImageIcon className="h-8 w-8 text-destructive/60" />
+      </div>
+    );
+  if (item.kind === "image" && url)
+    return <img src={url} alt={item.caption || item.original_filename} className="w-full h-28 object-cover" />;
+  if (item.kind === "image")
+    return <div className="w-full h-28 bg-secondary animate-pulse" />;
+  return (
+    <div className="w-full h-28 bg-secondary flex items-center justify-center">
+      <FileIcon className="h-8 w-8 text-muted-foreground" />
+    </div>
+  );
+}
+
+function MediaTab({ aircraft }) {
+  const [items, setItems] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [caption, setCaption] = useState("");
+
+  const load = useCallback(() => {
+    const q = aircraft ? `?aircraft_id=${aircraft.id}` : "";
+    api.get(`/media${q}`).then((r) => setItems(r.data));
+  }, [aircraft?.id]);
+  useEffect(() => { load(); }, [load]);
+
+  const upload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!aircraft) { toast.error("Select an aircraft first."); return; }
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("aircraft_id", aircraft.id);
+    fd.append("caption", caption);
+    try {
+      await api.post("/media", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Uploaded to storage");
+      setCaption("");
+      load();
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const del = async (id) => { await api.delete(`/media/${id}`); load(); };
+  const open = (id) => window.open(`${API}/media/${id}/download?auth=${getToken()}`, "_blank");
+
+  return (
+    <div className="p-5 space-y-4" data-testid="media-tab">
+      {!aircraft && <Empty text="Select an aircraft to attach photos & files." />}
+      {aircraft && (
+        <>
+          <div className="border border-border bg-secondary/40 p-3 space-y-3">
+            <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">Attach Photo / File</p>
+            <input
+              data-testid="media-caption"
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              placeholder="Caption (e.g. corroded ground strap, fwd bulkhead)"
+              className="w-full bg-secondary border border-border px-2 py-2 text-xs outline-none focus:ring-2 focus:ring-accent"
+            />
+            <label className="flex items-center justify-center gap-2 bg-primary text-white py-2.5 font-mono text-xs tracking-widest uppercase cursor-pointer hover:bg-primary/90 transition-colors">
+              <Upload className="h-4 w-4" /> {uploading ? "Uploading…" : "Choose File"}
+              <input
+                data-testid="media-file"
+                type="file"
+                accept="image/*,application/pdf,.txt,.csv,.doc,.docx"
+                onChange={upload}
+                className="hidden"
+                disabled={uploading}
+              />
+            </label>
+          </div>
+
+          {items.length === 0 && <Empty text="No photos or files attached yet." />}
+          <div className="grid grid-cols-2 gap-2" data-testid="media-grid">
+            {items.map((m) => (
+              <div key={m.id} className="border border-border group relative">
+                <button onClick={() => open(m.id)} className="block w-full" title="Open">
+                  <MediaThumb item={m} />
+                </button>
+                <div className="p-2">
+                  <p className="text-[11px] truncate">{m.caption || m.original_filename}</p>
+                  <p className="font-mono text-[9px] text-muted-foreground uppercase mt-0.5 flex items-center gap-1">
+                    {m.kind === "image" ? <ImageIcon className="h-3 w-3" /> : <FileIcon className="h-3 w-3" />}
+                    {(m.size / 1024).toFixed(0)} KB
+                  </p>
+                </div>
+                <button
+                  data-testid={`media-delete-${m.id}`}
+                  onClick={() => del(m.id)}
+                  className="absolute top-1 right-1 h-6 w-6 bg-background/80 border border-border flex items-center justify-center text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Empty({ text }) {
   return (
     <div className="text-center py-10 text-muted-foreground">
@@ -304,6 +434,7 @@ export default function Workbench({ aircraft, onAircraftSaved }) {
       <div className="flex-1 overflow-y-auto">
         {tab === "aircraft" && <AircraftTab aircraft={aircraft} onSaved={onAircraftSaved} />}
         {tab === "manuals" && <ManualsTab aircraft={aircraft} />}
+        {tab === "media" && <MediaTab aircraft={aircraft} />}
         {tab === "history" && <HistoryTab />}
         {tab === "logbook" && <LogbookTab aircraft={aircraft} />}
       </div>

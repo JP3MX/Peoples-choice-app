@@ -325,7 +325,71 @@ async def download_manual(manual_id: str, authorization: str = Header(None), aut
                     headers={"Content-Disposition": f'inline; filename="{record["original_filename"]}"'})
 
 # ---------------------------------------------------------------------------
-# Historical corpus
+# Media & file storage (photos, part/wiring images, misc files per aircraft)
+# ---------------------------------------------------------------------------
+IMAGE_EXTS = {"jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp"}
+
+@api_router.get("/media")
+async def list_media(aircraft_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"user_id": user["id"], "is_deleted": False}
+    if aircraft_id:
+        q["aircraft_id"] = aircraft_id
+    items = await db.media.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return items
+
+@api_router.post("/media")
+async def upload_media(
+    file: UploadFile = File(...),
+    aircraft_id: str = Form(""),
+    caption: str = Form(""),
+    user: dict = Depends(get_current_user),
+):
+    data = await file.read()
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "bin"
+    path = f"{APP_NAME}/media/{user['id']}/{uuid.uuid4()}.{ext}"
+    try:
+        put_object(path, data, file.content_type or "application/octet-stream")
+    except Exception as e:
+        logger.error(f"media upload failed: {e}")
+        raise HTTPException(status_code=502, detail="File storage upload failed")
+    ct = file.content_type or "application/octet-stream"
+    kind = "image" if ct.startswith("image/") or ext in IMAGE_EXTS else "file"
+    doc = {
+        "id": str(uuid.uuid4()), "user_id": user["id"], "aircraft_id": aircraft_id or None,
+        "storage_path": path, "original_filename": file.filename, "caption": caption,
+        "content_type": ct, "size": len(data), "kind": kind, "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.media.insert_one(dict(doc))
+    return clean(doc)
+
+@api_router.delete("/media/{media_id}")
+async def delete_media(media_id: str, user: dict = Depends(get_current_user)):
+    res = await db.media.update_one({"id": media_id, "user_id": user["id"], "is_deleted": False},
+                                    {"$set": {"is_deleted": True}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Media not found")
+    return {"ok": True}
+
+@api_router.get("/media/{media_id}/download")
+async def download_media(media_id: str, authorization: str = Header(None), auth: str = Query(None)):
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    elif auth:
+        token = auth
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=[JWT_ALGORITHM])
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    record = await db.media.find_one({"id": media_id, "user_id": payload["sub"], "is_deleted": False})
+    if not record:
+        raise HTTPException(status_code=404, detail="Media not found")
+    data, content_type = get_object(record["storage_path"])
+    return Response(content=data, media_type=record.get("content_type", content_type),
+                    headers={"Content-Disposition": f'inline; filename="{record["original_filename"]}"'})
 # ---------------------------------------------------------------------------
 @api_router.get("/corpus")
 async def list_corpus(q: Optional[str] = None, user: dict = Depends(get_current_user)):
