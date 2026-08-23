@@ -29,7 +29,10 @@ export default function Login() {
     try {
       if (mode === "login" || mode === "register") {
         const path = mode === "login" ? "/auth/login" : "/auth/register";
-        const body = mode === "login" ? { email, password } : { email, password, name };
+        const body =
+          mode === "login"
+            ? { email, password }
+            : { email, password, name, origin_url: window.location.origin };
         const { data } = await api.post(path, body);
         login(data.token, data.user);
         navigate("/");

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Check, Loader2, Zap } from "lucide-react";
+import { Check, Loader2, Zap, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 
@@ -13,6 +13,7 @@ export default function PricingPlans({ compact = false, onDone }) {
   const [plans, setPlans] = useState([]);
   const [status, setStatus] = useState(null);
   const [loadingKey, setLoadingKey] = useState(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     api.get("/billing/status").then((r) => {
@@ -33,6 +34,17 @@ export default function PricingPlans({ compact = false, onDone }) {
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Checkout failed");
       setLoadingKey(null);
+    }
+  };
+
+  const openPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const { data } = await api.post("/billing/portal", { return_url: window.location.href });
+      window.location.href = data.portal_url;
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Could not open billing portal");
+      setPortalLoading(false);
     }
   };
 
@@ -102,6 +114,22 @@ export default function PricingPlans({ compact = false, onDone }) {
       <p className="mt-5 font-mono text-[10px] text-muted-foreground/60 text-center">
         Test mode · use card 4242 4242 4242 4242, any future expiry, any CVC.
       </p>
+      {status?.can_manage && (
+        <div className="mt-6 text-center">
+          <button
+            data-testid="manage-subscription"
+            onClick={openPortal}
+            disabled={portalLoading}
+            className="inline-flex items-center gap-2 border border-border px-5 py-2.5 font-mono text-xs tracking-[0.15em] uppercase hover:bg-secondary transition-colors disabled:opacity-50"
+          >
+            {portalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" />}
+            Manage / Cancel Subscription
+          </button>
+          <p className="mt-2 font-mono text-[10px] text-muted-foreground/60">
+            Update payment method, switch plans, or cancel in the Stripe billing portal.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

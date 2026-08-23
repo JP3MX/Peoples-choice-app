@@ -136,10 +136,13 @@ async def apply_subscription(session_id: str):
     except Exception:
         return
     now = datetime.now(timezone.utc).isoformat()
-    await db.users.update_one({"_id": oid}, {"$set": {
+    set_fields = {
         "tier": tier, "subscription_status": "active", "tokens_used": 0,
         "period_start": now, "stripe_subscription_id": tx.get("stripe_subscription_id"),
-        "updated_at": now}})
+        "updated_at": now}
+    if tx.get("stripe_customer_id"):
+        set_fields["stripe_customer_id"] = tx["stripe_customer_id"]
+    await db.users.update_one({"_id": oid}, {"$set": set_fields})
 
 app = FastAPI(title="Squawk King IA")
 api_router = APIRouter(prefix="/api")
@@ -223,6 +226,7 @@ class RegisterInput(BaseModel):
     email: EmailStr
     password: str
     name: Optional[str] = "Mechanic"
+    origin_url: Optional[str] = None
 
 class LoginInput(BaseModel):
     email: EmailStr
@@ -268,6 +272,7 @@ async def register(payload: RegisterInput):
     res = await db.users.insert_one(doc)
     uid = str(res.inserted_id)
     token = create_access_token(uid, email)
+    asyncio.create_task(asyncio.to_thread(send_welcome_email, email, doc["name"], (payload.origin_url or "").rstrip("/")))
     return {"token": token, "user": {"id": uid, "email": email, "name": doc["name"], "role": "mechanic"}}
 
 @api_router.post("/auth/login")
@@ -294,40 +299,71 @@ RESEND_FROM_NAME = os.environ.get("RESEND_FROM_NAME", "Squawk King IA")
 def _resend_configured() -> bool:
     return bool(RESEND_API_KEY) and not RESEND_API_KEY.startswith("re_placeholder")
 
-def send_reset_email(to_email: str, link: str) -> bool:
-    html = f"""
+def _email_shell(title: str, body_html: str) -> str:
+    return f"""
     <div style="font-family:Arial,Helvetica,sans-serif;background:#050505;padding:32px;color:#fff">
       <div style="max-width:520px;margin:0 auto;background:#0a0a0a;border:1px solid #262626">
         <div style="padding:24px;border-bottom:1px solid #262626">
           <span style="font-weight:900;letter-spacing:1px;text-transform:uppercase">Squawk King IA</span>
+          <span style="color:#FF4F00;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-left:8px">Maintenance Agent</span>
         </div>
         <div style="padding:28px 24px">
-          <h1 style="font-size:20px;margin:0 0 12px">Reset your password</h1>
-          <p style="color:#a3a3a3;line-height:1.6;margin:0 0 24px">
-            We received a request to reset your Squawk King IA password. This link expires in {RESET_TTL_MIN} minutes and can be used once.
-          </p>
-          <a href="{link}" style="display:inline-block;background:#FF4F00;color:#fff;text-decoration:none;padding:14px 28px;font-weight:600;text-transform:uppercase;letter-spacing:1px;font-size:13px">Reset Password</a>
-          <p style="color:#666;font-size:12px;margin:24px 0 0;word-break:break-all">Or paste this link: {link}</p>
-          <p style="color:#666;font-size:12px;margin:16px 0 0">If you didn't request this, you can safely ignore this email.</p>
+          <h1 style="font-size:20px;margin:0 0 12px">{title}</h1>
+          {body_html}
+        </div>
+        <div style="padding:16px 24px;border-top:1px solid #262626;color:#555;font-size:11px">
+          Squawk King IA · Piston-aircraft maintenance troubleshooting
         </div>
       </div>
     </div>"""
+
+def _send_email(to_email: str, subject: str, html: str, tag: str = "email") -> bool:
     if not _resend_configured():
-        logger.warning(f"[reset] Resend not configured (placeholder key). Reset link for {to_email}: {link}")
+        logger.warning(f"[{tag}] Resend not configured (placeholder key). Would send '{subject}' to {to_email}")
         return False
     try:
         resend.api_key = RESEND_API_KEY
         resend.Emails.send({
             "from": f"{RESEND_FROM_NAME} <{RESEND_FROM}>",
-            "to": [to_email],
-            "subject": "Reset your Squawk King IA password",
-            "html": html,
+            "to": [to_email], "subject": subject, "html": html,
         })
-        logger.info(f"[reset] email sent to {to_email}")
+        logger.info(f"[{tag}] email sent to {to_email}")
         return True
     except Exception as e:
-        logger.error(f"[reset] Resend send failed for {to_email}: {e}. Link: {link}")
+        logger.error(f"[{tag}] Resend send failed for {to_email}: {e}")
         return False
+
+def send_reset_email(to_email: str, link: str) -> bool:
+    body = f"""
+      <p style="color:#a3a3a3;line-height:1.6;margin:0 0 24px">
+        We received a request to reset your Squawk King IA password. This link expires in {RESET_TTL_MIN} minutes and can be used once.
+      </p>
+      <a href="{link}" style="display:inline-block;background:#FF4F00;color:#fff;text-decoration:none;padding:14px 28px;font-weight:600;text-transform:uppercase;letter-spacing:1px;font-size:13px">Reset Password</a>
+      <p style="color:#666;font-size:12px;margin:24px 0 0;word-break:break-all">Or paste this link: {link}</p>
+      <p style="color:#666;font-size:12px;margin:16px 0 0">If you didn't request this, you can safely ignore this email.</p>"""
+    html = _email_shell("Reset your password", body)
+    sent = _send_email(to_email, "Reset your Squawk King IA password", html, tag="reset")
+    if not sent:
+        logger.warning(f"[reset] Reset link for {to_email}: {link}")
+    return sent
+
+def send_welcome_email(to_email: str, name: str, app_url: str = "") -> bool:
+    cta = f'<a href="{app_url}" style="display:inline-block;background:#007AFF;color:#fff;text-decoration:none;padding:14px 28px;font-weight:600;text-transform:uppercase;letter-spacing:1px;font-size:13px">Open the hangar</a>' if app_url else ""
+    body = f"""
+      <p style="color:#a3a3a3;line-height:1.6;margin:0 0 16px">Welcome aboard, {name}.</p>
+      <p style="color:#a3a3a3;line-height:1.6;margin:0 0 20px">
+        Your Squawk King IA account is ready. You're on a <strong style="color:#fff">3-day free trial</strong> with full troubleshooting access —
+        describe a squawk and get the most-likely cause first, sequenced steps, and citations to approved manuals with ATA chapters.
+      </p>
+      <ul style="color:#a3a3a3;line-height:1.7;margin:0 0 22px;padding-left:18px">
+        <li>Confirm your aircraft (make, model, year, serial, configuration)</li>
+        <li>Upload approved manuals (AMM, service manuals, ADs) for cited guidance</li>
+        <li>Keep a logbook and attach photos to each squawk</li>
+      </ul>
+      {cta}
+      <p style="color:#666;font-size:12px;margin:22px 0 0">Fly safe — the Squawk King IA crew</p>"""
+    html = _email_shell("Welcome to Squawk King IA", body)
+    return _send_email(to_email, "Welcome to Squawk King IA", html, tag="welcome")
 
 class ForgotInput(BaseModel):
     email: EmailStr
@@ -879,6 +915,8 @@ async def billing_status(user: dict = Depends(get_current_user)):
     ent = await get_entitlement(user["email"])
     ent["plans"] = PLANS
     ent["trial_days"] = TRIAL_DAYS
+    dbuser = await db.users.find_one({"email": user["email"]})
+    ent["can_manage"] = bool(dbuser and dbuser.get("stripe_customer_id"))
     return ent
 
 @api_router.post("/payments/checkout")
@@ -941,6 +979,7 @@ async def payment_status(session_id: str):
                     {"session_id": session_id, "payment_status": {"$ne": "paid"}},
                     {"$set": {"status": "completed", "payment_status": "paid",
                               "stripe_subscription_id": s.subscription,
+                              "stripe_customer_id": s.customer,
                               "updated_at": datetime.now(timezone.utc).isoformat()}})
                 await apply_subscription(session_id)
                 record = await db.payment_transactions.find_one({"session_id": session_id})
@@ -963,6 +1002,7 @@ async def stripe_webhook(request: Request):
             {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
             {"$set": {"status": "completed", "payment_status": obj.get("payment_status", "paid"),
                       "stripe_subscription_id": obj.get("subscription"),
+                      "stripe_customer_id": obj.get("customer"),
                       "updated_at": datetime.now(timezone.utc).isoformat()}})
         await apply_subscription(obj["id"])
     elif t == "checkout.session.expired":
@@ -970,6 +1010,25 @@ async def stripe_webhook(request: Request):
             {"$set": {"status": "expired", "payment_status": "expired",
                       "updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"status": "ok"}
+
+class PortalRequest(BaseModel):
+    return_url: str
+
+@api_router.post("/billing/portal")
+async def billing_portal(req: PortalRequest, user: dict = Depends(get_current_user)):
+    dbuser = await db.users.find_one({"email": user["email"]})
+    customer_id = dbuser.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400,
+                            detail="No active subscription to manage. Choose a plan first.")
+    return_url = (req.return_url or "").rstrip("/") or os.environ.get("CORS_ORIGINS", "").split(",")[0]
+    try:
+        session = await asyncio.to_thread(
+            lambda: stripe.billing_portal.Session.create(customer=customer_id, return_url=return_url))
+    except stripe.error.StripeError as e:
+        logger.error(f"[portal] failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not open billing portal")
+    return {"portal_url": session.url}
 
 # ---------------------------------------------------------------------------
 # Startup
