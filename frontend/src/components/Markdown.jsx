@@ -1,6 +1,8 @@
 import React from "react";
+import DOMPurify from "dompurify";
 
-// Lightweight, safe-ish markdown renderer for chat responses.
+// Lightweight markdown renderer for chat responses. All generated HTML is
+// sanitized with DOMPurify before it reaches dangerouslySetInnerHTML.
 function inline(text) {
   let t = text
     .replace(/&/g, "&amp;")
@@ -12,6 +14,14 @@ function inline(text) {
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   return t;
+}
+
+// Sanitize to a strict allow-list of inline formatting tags only.
+function safe(text) {
+  return DOMPurify.sanitize(inline(text), {
+    ALLOWED_TAGS: ["span", "code", "strong", "em", "b", "i"],
+    ALLOWED_ATTR: ["class"],
+  });
 }
 
 export default function Markdown({ text }) {
@@ -54,22 +64,22 @@ export default function Markdown({ text }) {
       {blocks.map((b, i) => {
         if (b.type === "h") {
           const Tag = `h${Math.min(b.level + 1, 4)}`;
-          return React.createElement(Tag, { key: i, dangerouslySetInnerHTML: { __html: inline(b.text) } });
+          return React.createElement(Tag, { key: i, dangerouslySetInnerHTML: { __html: safe(b.text) } });
         }
         if (b.type === "p")
-          return <p key={i} dangerouslySetInnerHTML={{ __html: inline(b.text) }} />;
+          return <p key={i} dangerouslySetInnerHTML={{ __html: safe(b.text) }} />;
         if (b.type === "ol")
           return (
             <ol key={i}>
               {b.items.map((it, j) => (
-                <li key={j} className="animate-step-in" style={{ animationDelay: `${j * 40}ms` }} dangerouslySetInnerHTML={{ __html: inline(it) }} />
+                <li key={j} className="animate-step-in" style={{ animationDelay: `${j * 40}ms` }} dangerouslySetInnerHTML={{ __html: safe(it) }} />
               ))}
             </ol>
           );
         return (
           <ul key={i}>
             {b.items.map((it, j) => (
-              <li key={j} dangerouslySetInnerHTML={{ __html: inline(it) }} />
+              <li key={j} dangerouslySetInnerHTML={{ __html: safe(it) }} />
             ))}
           </ul>
         );

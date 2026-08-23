@@ -113,7 +113,9 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
         let detail = "Upgrade required to continue troubleshooting.";
         try {
           detail = (await res.json()).detail || detail;
-        } catch (e) {}
+        } catch (e) {
+          console.error("Failed to parse 402 response body:", e);
+        }
         setMessages((m) => m.filter((x) => x.id !== tmpId));
         setStreaming(false);
         setInput(text);
@@ -151,6 +153,7 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
         }
       }
     } catch (e) {
+      console.error("Chat stream failed:", e);
       acc += `\n\n**Connection error.** Please retry.`;
       setStreamText(acc);
     }

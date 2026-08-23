@@ -29,7 +29,7 @@ export default function PaymentSuccess() {
           return;
         }
       } catch (e) {
-        /* keep polling */
+        console.error("Payment status poll failed, retrying:", e);
       }
       polls += 1;
       if (polls >= MAX_POLLS) {
