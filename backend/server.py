@@ -428,11 +428,55 @@ async def change_password(payload: ChangePwInput, user: dict = Depends(get_curre
     if len(payload.new_password) < 6:
         raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
     dbuser = await db.users.find_one({"email": user["email"]})
-    if not verify_password(payload.current_password, dbuser["password_hash"]):
+    if not dbuser.get("password_hash") or not verify_password(payload.current_password, dbuser["password_hash"]):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     await db.users.update_one({"email": user["email"]},
                               {"$set": {"password_hash": hash_password(payload.new_password)}})
     return {"ok": True, "message": "Password changed successfully"}
+
+EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+
+@api_router.post("/auth/google/session")
+async def google_session(request: Request):
+    session_id = request.headers.get("X-Session-ID")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Missing session id")
+    try:
+        resp = await asyncio.to_thread(
+            requests.get, EMERGENT_SESSION_URL,
+            headers={"X-Session-ID": session_id}, timeout=30)
+    except Exception as e:
+        logger.error(f"[google-auth] session-data request failed: {e}")
+        raise HTTPException(status_code=502, detail="Auth service unavailable")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired Google session")
+    data = resp.json()
+    email = (data.get("email") or "").lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Google session missing email")
+    name = data.get("name") or "Mechanic"
+    picture = data.get("picture")
+    now = datetime.now(timezone.utc).isoformat()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        doc = {"email": email, "password_hash": None, "name": name, "role": "mechanic",
+               "auth_provider": "google", "picture": picture, "created_at": now}
+        res = await db.users.insert_one(doc)
+        uid = str(res.inserted_id)
+        asyncio.create_task(asyncio.to_thread(send_welcome_email, email, name, ""))
+    else:
+        uid = str(user["_id"])
+        updates = {}
+        if picture and user.get("picture") != picture:
+            updates["picture"] = picture
+        if not user.get("auth_provider"):
+            updates["auth_provider"] = "google"
+        if updates:
+            await db.users.update_one({"_id": user["_id"]}, {"$set": updates})
+        name = user.get("name", name)
+    token = create_access_token(uid, email)
+    return {"token": token, "user": {"id": uid, "email": email, "name": name,
+                                     "role": "mechanic", "picture": picture}}
 
 # ---------------------------------------------------------------------------
 # Aircraft routes

@@ -7,6 +7,29 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // null=checking, false=logged out, object=logged in
 
   useEffect(() => {
+    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    // Handle Emergent Google OAuth callback: user returns to <origin>/#session_id=...
+    const hash = window.location.hash || "";
+    if (hash.includes("session_id=")) {
+      const sid = new URLSearchParams(hash.replace(/^#/, "")).get("session_id");
+      const cleanHash = () =>
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      if (sid) {
+        api
+          .post("/auth/google/session", {}, { headers: { "X-Session-ID": sid } })
+          .then((res) => {
+            localStorage.setItem("sk_token", res.data.token);
+            setUser(res.data.user);
+            cleanHash();
+          })
+          .catch(() => {
+            cleanHash();
+            setUser(false);
+          });
+        return;
+      }
+    }
+
     const token = localStorage.getItem("sk_token");
     if (!token) {
       setUser(false);
