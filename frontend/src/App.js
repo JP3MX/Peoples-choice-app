@@ -7,6 +7,7 @@ import Workspace from "@/pages/Workspace";
 import Pricing from "@/pages/Pricing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
+import ResetPassword from "@/pages/ResetPassword";
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
@@ -30,6 +31,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/reset" element={<ResetPassword />} />
             <Route
               path="/pricing"
               element={

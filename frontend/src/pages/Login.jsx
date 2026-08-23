@@ -9,7 +9,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
   const [info, setInfo] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,16 +34,8 @@ export default function Login() {
         login(data.token, data.user);
         navigate("/");
       } else if (mode === "forgot") {
-        const { data } = await api.post("/auth/forgot-password", { email });
-        setCode(data.code);
-        setInfo(`Reset code generated. Valid for ${data.expires_in_minutes} minutes.`);
-        setPassword("");
-        setMode("reset");
-      } else if (mode === "reset") {
-        await api.post("/auth/reset-password", { email, code, new_password: password });
-        setInfo("Password updated. Sign in with your new password.");
-        setPassword("");
-        setMode("login");
+        await api.post("/auth/forgot-password", { email, origin_url: window.location.origin });
+        setInfo("If an account with that email exists, a password reset link has been sent. Check your inbox.");
       }
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
@@ -57,13 +48,11 @@ export default function Login() {
     login: ["Access Hangar", "Sign in to your bay"],
     register: ["New Mechanic", "Create your account"],
     forgot: ["Reset Access", "Forgot your password?"],
-    reset: ["Reset Access", "Set a new password"],
   };
   const submitLabels = {
     login: "Sign In",
     register: "Create Account",
-    forgot: "Get Reset Code",
-    reset: "Update Password",
+    forgot: "Send Reset Link",
   };
 
   return (
@@ -119,7 +108,7 @@ export default function Login() {
             </div>
           )}
 
-          {(mode === "login" || mode === "register" || mode === "forgot" || mode === "reset") && (
+          {(mode === "login" || mode === "register" || mode === "forgot") && (
             <div className="mb-4">
               <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">Email</label>
               <input
@@ -128,39 +117,21 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={mode === "reset"}
-                className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono disabled:opacity-60"
+                className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono"
                 placeholder="mechanic@squawkking.io"
               />
             </div>
           )}
 
-          {mode === "reset" && (
-            <>
-              {code && (
-                <div data-testid="reset-code-display" className="mb-4 border border-primary/40 bg-primary/10 px-3 py-2.5">
-                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">Your reset code</p>
-                  <p className="font-mono text-2xl tracking-[0.4em] text-primary mt-1">{code}</p>
-                </div>
-              )}
-              <div className="mb-4">
-                <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">Reset Code</label>
-                <input
-                  data-testid="reset-code-input"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  className="mt-1 w-full bg-secondary border border-border px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent text-sm font-mono tracking-[0.3em]"
-                  placeholder="6-digit code"
-                />
-              </div>
-            </>
+          {mode === "forgot" && (
+            <p className="text-sm text-muted-foreground mb-6 -mt-1 leading-relaxed">
+              Enter your account email and we'll send a secure reset link to your inbox. The link expires in 30 minutes.
+            </p>
           )}
 
-          {(mode === "login" || mode === "register" || mode === "reset") && (
+          {(mode === "login" || mode === "register") && (
             <div className="mb-2">
-              <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">
-                {mode === "reset" ? "New Password" : "Password"}
-              </label>
+              <label className="font-mono text-[11px] tracking-[0.2em] uppercase text-muted-foreground">Password</label>
               <input
                 data-testid="password-input"
                 type="password"
@@ -216,7 +187,7 @@ export default function Login() {
               Already registered? Sign in
             </button>
           )}
-          {(mode === "forgot" || mode === "reset") && (
+          {mode === "forgot" && (
             <button type="button" data-testid="back-to-login" onClick={() => switchMode("login")} className="w-full mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors">
               Back to sign in
             </button>

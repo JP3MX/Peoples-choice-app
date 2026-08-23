@@ -18,6 +18,7 @@ import bcrypt
 import jwt
 import asyncio
 import stripe
+import resend
 import requests
 from bson import ObjectId
 from pypdf import PdfReader
@@ -283,14 +284,57 @@ async def login(payload: LoginInput):
 async def me(user: dict = Depends(get_current_user)):
     return user
 
-RESET_CODE_TTL_MIN = 15
+RESET_TTL_MIN = 30
+RESET_RATE_MAX = 3
+RESET_RATE_WINDOW_MIN = 15
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_FROM = os.environ.get("RESEND_FROM", "onboarding@resend.dev")
+RESEND_FROM_NAME = os.environ.get("RESEND_FROM_NAME", "Squawk King IA")
+
+def _resend_configured() -> bool:
+    return bool(RESEND_API_KEY) and not RESEND_API_KEY.startswith("re_placeholder")
+
+def send_reset_email(to_email: str, link: str) -> bool:
+    html = f"""
+    <div style="font-family:Arial,Helvetica,sans-serif;background:#050505;padding:32px;color:#fff">
+      <div style="max-width:520px;margin:0 auto;background:#0a0a0a;border:1px solid #262626">
+        <div style="padding:24px;border-bottom:1px solid #262626">
+          <span style="font-weight:900;letter-spacing:1px;text-transform:uppercase">Squawk King IA</span>
+        </div>
+        <div style="padding:28px 24px">
+          <h1 style="font-size:20px;margin:0 0 12px">Reset your password</h1>
+          <p style="color:#a3a3a3;line-height:1.6;margin:0 0 24px">
+            We received a request to reset your Squawk King IA password. This link expires in {RESET_TTL_MIN} minutes and can be used once.
+          </p>
+          <a href="{link}" style="display:inline-block;background:#FF4F00;color:#fff;text-decoration:none;padding:14px 28px;font-weight:600;text-transform:uppercase;letter-spacing:1px;font-size:13px">Reset Password</a>
+          <p style="color:#666;font-size:12px;margin:24px 0 0;word-break:break-all">Or paste this link: {link}</p>
+          <p style="color:#666;font-size:12px;margin:16px 0 0">If you didn't request this, you can safely ignore this email.</p>
+        </div>
+      </div>
+    </div>"""
+    if not _resend_configured():
+        logger.warning(f"[reset] Resend not configured (placeholder key). Reset link for {to_email}: {link}")
+        return False
+    try:
+        resend.api_key = RESEND_API_KEY
+        resend.Emails.send({
+            "from": f"{RESEND_FROM_NAME} <{RESEND_FROM}>",
+            "to": [to_email],
+            "subject": "Reset your Squawk King IA password",
+            "html": html,
+        })
+        logger.info(f"[reset] email sent to {to_email}")
+        return True
+    except Exception as e:
+        logger.error(f"[reset] Resend send failed for {to_email}: {e}. Link: {link}")
+        return False
 
 class ForgotInput(BaseModel):
     email: EmailStr
+    origin_url: Optional[str] = None
 
 class ResetInput(BaseModel):
-    email: EmailStr
-    code: str
+    token: str
     new_password: str
 
 class ChangePwInput(BaseModel):
@@ -300,31 +344,46 @@ class ChangePwInput(BaseModel):
 @api_router.post("/auth/forgot-password")
 async def forgot_password(payload: ForgotInput):
     email = payload.email.lower()
+    now = datetime.now(timezone.utc)
+    window_start = (now - timedelta(minutes=RESET_RATE_WINDOW_MIN)).isoformat()
+    # Bounded-growth cleanup: drop stale rate rows and expired/used reset tokens.
+    await db.reset_attempts.delete_many({"ts": {"$lt": window_start}})
+    await db.password_reset_tokens.delete_many(
+        {"$or": [{"used": True}, {"expires_at": {"$lt": now.isoformat()}}]})
+    recent = await db.reset_attempts.count_documents({"email": email, "ts": {"$gte": window_start}})
+    if recent >= RESET_RATE_MAX:
+        raise HTTPException(status_code=429,
+                            detail="Too many reset requests. Please wait a few minutes and try again.")
+    await db.reset_attempts.insert_one({"email": email, "ts": now.isoformat()})
+
+    generic = {"message": "If an account with that email exists, a password reset link has been sent."}
     user = await db.users.find_one({"email": email})
     if not user:
-        raise HTTPException(status_code=404, detail="No account found with that email")
-    code = f"{secrets.randbelow(1000000):06d}"
-    expires = datetime.now(timezone.utc) + timedelta(minutes=RESET_CODE_TTL_MIN)
+        return generic
+
+    token = secrets.token_urlsafe(32)
+    expires = now + timedelta(minutes=RESET_TTL_MIN)
     await db.password_reset_tokens.delete_many({"email": email})
     await db.password_reset_tokens.insert_one({
-        "email": email, "code": code, "expires_at": expires.isoformat(),
-        "used": False, "created_at": datetime.now(timezone.utc).isoformat(),
+        "email": email, "token": token, "expires_at": expires.isoformat(),
+        "used": False, "created_at": now.isoformat(),
     })
-    logger.info(f"[password-reset] code for {email}: {code}")
-    return {"email": email, "code": code, "expires_in_minutes": RESET_CODE_TTL_MIN,
-            "message": "Enter this code with a new password to reset."}
+    origin = (payload.origin_url or "").rstrip("/") or os.environ.get("CORS_ORIGINS", "").split(",")[0].rstrip("/")
+    link = f"{origin}/reset?token={token}"
+    send_reset_email(email, link)
+    return generic
 
 @api_router.post("/auth/reset-password")
 async def reset_password(payload: ResetInput):
     if len(payload.new_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    email = payload.email.lower()
-    rec = await db.password_reset_tokens.find_one({"email": email, "code": payload.code.strip()})
+    rec = await db.password_reset_tokens.find_one({"token": payload.token.strip()})
     if not rec or rec.get("used"):
-        raise HTTPException(status_code=400, detail="Invalid or already-used reset code")
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has already been used.")
     if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Reset code expired. Request a new one.")
-    await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(payload.new_password)}})
+        raise HTTPException(status_code=400, detail="This reset link has expired. Request a new one.")
+    await db.users.update_one({"email": rec["email"]},
+                              {"$set": {"password_hash": hash_password(payload.new_password)}})
     await db.password_reset_tokens.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
     return {"ok": True, "message": "Password updated. You can now sign in."}
 
@@ -919,6 +978,8 @@ async def stripe_webhook(request: Request):
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at")
+    await db.password_reset_tokens.create_index("token")
+    await db.reset_attempts.create_index("ts")
     admin_email = os.environ.get("ADMIN_EMAIL", "mechanic@squawkking.io")
     admin_password = os.environ.get("ADMIN_PASSWORD", "squawk123")
     existing = await db.users.find_one({"email": admin_email})
