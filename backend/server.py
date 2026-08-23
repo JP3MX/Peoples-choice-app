@@ -16,6 +16,8 @@ from typing import List, Optional
 
 import bcrypt
 import jwt
+import asyncio
+import stripe
 import requests
 from bson import ObjectId
 from pypdf import PdfReader
@@ -56,6 +58,87 @@ OPENAI_MODELS = [
 ]
 ALLOWED_MODEL_IDS = {m["id"] for m in OPENAI_MODELS}
 DEFAULT_MODEL = "gpt-5.4"
+
+# --- Billing / subscription config ---
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+TRIAL_DAYS = 3
+
+PLANS = [
+    {"lookup_key": "sk_basic_monthly", "tier": "basic", "name": "Basic",
+     "price": 19, "tokens": 5,
+     "features": ["5 troubleshooting tokens / month", "Unlimited aircraft profiles",
+                  "Manual uploads & ATA citations", "Logbook & media"]},
+    {"lookup_key": "sk_pro_monthly", "tier": "pro", "name": "Pro",
+     "price": 39, "tokens": 50,
+     "features": ["50 troubleshooting tokens / month", "Everything in Basic",
+                  "Priority historical-corpus matching", "Model selector (GPT-5.x)"]},
+    {"lookup_key": "sk_unlimited_monthly", "tier": "unlimited", "name": "Unlimited",
+     "price": 79, "tokens": None,
+     "features": ["Unlimited troubleshooting guidance", "Everything in Pro",
+                  "Best for busy shops & multi-mechanic use"]},
+]
+TIER_LIMITS = {p["tier"]: p["tokens"] for p in PLANS}
+LOOKUP_TIER = {p["lookup_key"]: p["tier"] for p in PLANS}
+
+def _parse_dt(s):
+    if not s:
+        return datetime.now(timezone.utc)
+    try:
+        dt = datetime.fromisoformat(s) if isinstance(s, str) else s
+    except ValueError:
+        return datetime.now(timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+async def get_entitlement(email: str) -> dict:
+    doc = await db.users.find_one({"email": email})
+    now = datetime.now(timezone.utc)
+    if not doc:
+        return {"plan": "none", "trial_active": False, "allowed": False, "limit": 0,
+                "used": 0, "remaining": 0, "trial_days_left": 0, "status": "expired"}
+    if doc.get("role") == "admin":
+        return {"plan": "unlimited", "trial_active": False, "allowed": True, "limit": None,
+                "used": 0, "remaining": None, "trial_days_left": 0, "status": "active"}
+    tier = doc.get("tier")
+    if tier in TIER_LIMITS and doc.get("subscription_status") == "active":
+        ps = _parse_dt(doc.get("period_start")) if doc.get("period_start") else now
+        used = doc.get("tokens_used", 0)
+        if now - ps > timedelta(days=30):
+            used = 0
+            await db.users.update_one({"email": email},
+                                      {"$set": {"tokens_used": 0, "period_start": now.isoformat()}})
+        limit = TIER_LIMITS[tier]
+        remaining = None if limit is None else max(0, limit - used)
+        return {"plan": tier, "trial_active": False, "allowed": limit is None or used < limit,
+                "limit": limit, "used": used, "remaining": remaining, "trial_days_left": 0,
+                "status": "active"}
+    created = _parse_dt(doc.get("created_at"))
+    trial_end = created + timedelta(days=TRIAL_DAYS)
+    trial_active = now < trial_end
+    secs = (trial_end - now).total_seconds()
+    days_left = max(0, -(-int(secs) // 86400)) if trial_active else 0
+    return {"plan": "trial" if trial_active else "none", "trial_active": trial_active,
+            "allowed": trial_active, "limit": None, "used": 0, "remaining": None,
+            "trial_days_left": days_left, "trial_ends": trial_end.isoformat(),
+            "status": "trialing" if trial_active else "expired"}
+
+async def apply_subscription(session_id: str):
+    tx = await db.payment_transactions.find_one({"session_id": session_id})
+    if not tx:
+        return
+    tier = LOOKUP_TIER.get(tx.get("lookup_key"))
+    uid = tx.get("user_id")
+    if not tier or not uid:
+        return
+    try:
+        oid = ObjectId(uid)
+    except Exception:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one({"_id": oid}, {"$set": {
+        "tier": tier, "subscription_status": "active", "tokens_used": 0,
+        "period_start": now, "stripe_subscription_id": tx.get("stripe_subscription_id"),
+        "updated_at": now}})
 
 app = FastAPI(title="Squawk King IA")
 api_router = APIRouter(prefix="/api")
@@ -648,6 +731,14 @@ async def stream_chat(session_id: str, user: dict, text: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    ent = await get_entitlement(user["email"])
+    if not ent["allowed"]:
+        if ent["plan"] in ("trial", "none"):
+            detail = "Your free trial has ended. Choose a plan to continue troubleshooting."
+        else:
+            detail = "You've used all troubleshooting tokens for this period. Upgrade your plan to continue."
+        raise HTTPException(status_code=402, detail=detail)
+
     aircraft = None
     if session.get("aircraft_id"):
         aircraft = await db.aircraft.find_one({"id": session["aircraft_id"]}, {"_id": 0})
@@ -702,6 +793,8 @@ async def stream_chat(session_id: str, user: dict, text: str):
                                           "citations": citations, "corpus": meta["corpus"],
                                           "created_at": datetime.now(timezone.utc).isoformat()})
             await db.sessions.update_one({"id": session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+            if ent["plan"] in TIER_LIMITS and TIER_LIMITS.get(ent["plan"]) is not None:
+                await db.users.update_one({"email": user["email"]}, {"$inc": {"tokens_used": 1}})
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream",
@@ -710,6 +803,114 @@ async def stream_chat(session_id: str, user: dict, text: str):
 @api_router.post("/sessions/{session_id}/message")
 async def send_message(session_id: str, payload: MessageInput, user: dict = Depends(get_current_user)):
     return await stream_chat(session_id, user, payload.text)
+
+# ---------------------------------------------------------------------------
+# Billing & Stripe payments
+# ---------------------------------------------------------------------------
+class CheckoutRequest(BaseModel):
+    lookup_key: str
+    origin_url: str
+
+@api_router.get("/billing/plans")
+async def billing_plans():
+    return {"plans": PLANS, "trial_days": TRIAL_DAYS}
+
+@api_router.get("/billing/status")
+async def billing_status(user: dict = Depends(get_current_user)):
+    ent = await get_entitlement(user["email"])
+    ent["plans"] = PLANS
+    ent["trial_days"] = TRIAL_DAYS
+    return ent
+
+@api_router.post("/payments/checkout")
+async def create_checkout(req: CheckoutRequest, user: dict = Depends(get_current_user)):
+    if req.lookup_key not in LOOKUP_TIER:
+        raise HTTPException(status_code=400, detail="Unknown plan")
+    prices = await asyncio.to_thread(
+        lambda: stripe.Price.list(lookup_keys=[req.lookup_key], active=True, limit=1).data)
+    if not prices:
+        raise HTTPException(status_code=500, detail=f"Price not configured: {req.lookup_key}")
+    price = prices[0]
+    origin = req.origin_url.rstrip("/")
+    def _create():
+        return stripe.checkout.Session.create(
+            line_items=[{"price": price.id, "quantity": 1}],
+            mode="subscription",
+            success_url=f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/payment/cancel",
+            metadata={"user_id": user["id"], "lookup_key": req.lookup_key},
+            subscription_data={"metadata": {"user_id": user["id"], "lookup_key": req.lookup_key}},
+            managed_payments={"enabled": True},
+        )
+    try:
+        session = await asyncio.to_thread(_create)
+    except stripe.error.InvalidRequestError as e:
+        msg = (getattr(e, "user_message", "") or "").lower()
+        if "managed payments" in msg or "ineligible" in msg:
+            def _create_tax():
+                return stripe.checkout.Session.create(
+                    line_items=[{"price": price.id, "quantity": 1}],
+                    mode="subscription",
+                    success_url=f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+                    cancel_url=f"{origin}/payment/cancel",
+                    metadata={"user_id": user["id"], "lookup_key": req.lookup_key},
+                    subscription_data={"metadata": {"user_id": user["id"], "lookup_key": req.lookup_key}},
+                    automatic_tax={"enabled": True}, billing_address_collection="required",
+                )
+            session = await asyncio.to_thread(_create_tax)
+        else:
+            raise HTTPException(status_code=502, detail="Stripe checkout failed")
+    await db.payment_transactions.insert_one({
+        "session_id": session.id, "user_id": user["id"], "lookup_key": req.lookup_key,
+        "amount": (price.unit_amount or 0) / 100.0, "currency": price.currency,
+        "status": "initiated", "payment_status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"checkout_url": session.url, "session_id": session.id}
+
+@api_router.get("/payments/status/{session_id}")
+async def payment_status(session_id: str):
+    record = await db.payment_transactions.find_one({"session_id": session_id})
+    if not record:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if record.get("payment_status") != "paid":
+        try:
+            s = await asyncio.to_thread(stripe.checkout.Session.retrieve, session_id)
+            if s.payment_status == "paid" or s.status == "complete":
+                await db.payment_transactions.update_one(
+                    {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+                    {"$set": {"status": "completed", "payment_status": "paid",
+                              "stripe_subscription_id": s.subscription,
+                              "updated_at": datetime.now(timezone.utc).isoformat()}})
+                await apply_subscription(session_id)
+                record = await db.payment_transactions.find_one({"session_id": session_id})
+        except stripe.error.StripeError:
+            pass
+    return {"session_id": record["session_id"], "status": record["status"],
+            "payment_status": record["payment_status"]}
+
+@api_router.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except (stripe.error.SignatureVerificationError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    obj, t = event["data"]["object"], event["type"]
+    if t == "checkout.session.completed":
+        await db.payment_transactions.update_one(
+            {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
+            {"$set": {"status": "completed", "payment_status": obj.get("payment_status", "paid"),
+                      "stripe_subscription_id": obj.get("subscription"),
+                      "updated_at": datetime.now(timezone.utc).isoformat()}})
+        await apply_subscription(obj["id"])
+    elif t == "checkout.session.expired":
+        await db.payment_transactions.update_one({"session_id": obj["id"]},
+            {"$set": {"status": "expired", "payment_status": "expired",
+                      "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"status": "ok"}
 
 # ---------------------------------------------------------------------------
 # Startup

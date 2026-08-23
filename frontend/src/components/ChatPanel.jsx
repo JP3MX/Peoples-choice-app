@@ -50,7 +50,7 @@ function CorpusRow({ corpus }) {
   );
 }
 
-export default function ChatPanel({ session, aircraft, onCitations, onSessionUpdate }) {
+export default function ChatPanel({ session, aircraft, onCitations, onSessionUpdate, onPaywall }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -92,7 +92,8 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
     const text = input.trim();
     if (!text || streaming || !session) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: text, id: `tmp-${Date.now()}` }]);
+    const tmpId = `tmp-${Date.now()}`;
+    setMessages((m) => [...m, { role: "user", content: text, id: tmpId }]);
     setStreaming(true);
     setStreamText("");
     setStreamMeta(null);
@@ -108,6 +109,17 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
         },
         body: JSON.stringify({ text }),
       });
+      if (res.status === 402) {
+        let detail = "Upgrade required to continue troubleshooting.";
+        try {
+          detail = (await res.json()).detail || detail;
+        } catch (e) {}
+        setMessages((m) => m.filter((x) => x.id !== tmpId));
+        setStreaming(false);
+        setInput(text);
+        onPaywall?.(detail);
+        return;
+      }
       if (!res.ok || !res.body) {
         throw new Error(`Request failed (${res.status})`);
       }

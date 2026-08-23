@@ -1,24 +1,35 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen, KeyRound,
+  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen, KeyRound, Zap,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import ChatPanel from "@/components/ChatPanel";
 import Workbench from "@/components/Workbench";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
+import UpgradeModal from "@/components/UpgradeModal";
 
 export default function Workspace() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [aircraftList, setAircraftList] = useState([]);
   const [showWorkbench, setShowWorkbench] = useState(true);
   const [acMenu, setAcMenu] = useState(false);
   const [showChangePw, setShowChangePw] = useState(false);
+  const [billing, setBilling] = useState(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState("");
 
   const activeAircraft = aircraftList.find((a) => a.id === activeSession?.aircraft_id) || null;
+
+  const loadBilling = useCallback(async () => {
+    const { data } = await api.get("/billing/status");
+    setBilling(data);
+  }, []);
 
   const loadSessions = useCallback(async () => {
     const { data } = await api.get("/sessions");
@@ -33,10 +44,16 @@ export default function Workspace() {
   useEffect(() => {
     (async () => {
       await loadAircraft();
+      await loadBilling();
       const s = await loadSessions();
       if (s.length > 0) setActiveSession(s[0]);
     })();
-  }, [loadSessions, loadAircraft]);
+  }, [loadSessions, loadAircraft, loadBilling]);
+
+  const handlePaywall = (reason) => {
+    setUpgradeReason(reason);
+    setShowUpgrade(true);
+  };
 
   const newSession = async () => {
     const { data } = await api.post("/sessions", { title: "New Troubleshooting Session", aircraft_id: activeAircraft?.id || null });
@@ -88,6 +105,31 @@ export default function Workspace() {
             <p className="font-head font-black text-sm uppercase tracking-tight leading-none">Squawk King</p>
             <p className="font-mono text-[9px] tracking-[0.2em] uppercase text-accent mt-0.5">IA · Maint. Agent</p>
           </div>
+        </div>
+
+        {/* plan / billing */}
+        <div className="px-3 py-3 border-b border-border">
+          <button
+            data-testid="billing-badge"
+            onClick={() => navigate("/pricing")}
+            className="w-full border border-border bg-secondary/40 px-3 py-2 flex items-center justify-between hover:border-accent/60 transition-colors group"
+          >
+            <span className="flex items-center gap-1.5 min-w-0">
+              <Zap className="h-3.5 w-3.5 text-accent shrink-0" />
+              <span className="font-mono text-[10px] tracking-widest uppercase truncate">
+                {!billing
+                  ? "…"
+                  : billing.trial_active
+                  ? `Trial · ${billing.trial_days_left}d left`
+                  : billing.plan && billing.plan !== "none"
+                  ? `${billing.plan}${billing.remaining != null ? ` · ${billing.remaining} left` : ""}`
+                  : "Trial ended"}
+              </span>
+            </span>
+            <span className="font-mono text-[9px] tracking-widest uppercase text-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              {billing && billing.plan === "unlimited" ? "Plans" : "Upgrade"}
+            </span>
+          </button>
         </div>
 
         {/* aircraft selector */}
@@ -183,6 +225,7 @@ export default function Workspace() {
           <ChatPanel
             session={activeSession}
             aircraft={activeAircraft}
+            onPaywall={handlePaywall}
             onSessionUpdate={(s) => {
               setActiveSession(s);
               setSessions((list) => list.map((x) => (x.id === s.id ? s : x)));
@@ -208,6 +251,14 @@ export default function Workspace() {
       )}
 
       <ChangePasswordModal open={showChangePw} onClose={() => setShowChangePw(false)} />
+      <UpgradeModal
+        open={showUpgrade}
+        reason={upgradeReason}
+        onClose={() => {
+          setShowUpgrade(false);
+          loadBilling();
+        }}
+      />
     </div>
   );
 }
