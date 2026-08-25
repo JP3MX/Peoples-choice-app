@@ -78,11 +78,13 @@ def test_seeded_aircraft_present(s, auth):
 
 
 # --- CORPUS -----------------------------------------------------------------
-def test_corpus_seeded_12(s, auth):
+def test_corpus_seeded_331(s, auth):
+    # Updated 2026-08-25: corpus replaced with 331 real owner-authored logbook
+    # records (was 12 hardcoded samples) — see backend/corpus_seed.py.
     r = s.get(f"{API}/corpus", headers=auth)
     assert r.status_code == 200
     items = r.json()
-    assert len(items) == 12, f"expected 12 seeded, got {len(items)}"
+    assert len(items) == 331, f"expected 331 seeded, got {len(items)}"
 
 
 def test_corpus_search(s, auth):
