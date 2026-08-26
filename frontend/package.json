@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@hookform/resolvers": "5.0.1",
     "@radix-ui/react-accordion": "1.2.8",
     "@radix-ui/react-alert-dialog": "1.1.11",
@@ -65,6 +68,13 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test"
+  },
+  "overrides": {
+    "react-day-picker": {
+      "date-fns": "$date-fns",
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   },
   "browserslist": {
     "production": [

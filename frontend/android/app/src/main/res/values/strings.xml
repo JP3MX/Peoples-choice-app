@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Squawk King IA - Peoples Choice</string>
+    <string name="title_activity_main">Squawk King IA - Peoples Choice</string>
+    <string name="package_name">com.jp3aviation.peopleschoice</string>
+    <string name="custom_url_scheme">com.jp3aviation.peopleschoice</string>
+</resources>

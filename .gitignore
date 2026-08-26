@@ -86,3 +86,8 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Release signing — NEVER commit
+*.keystore
+RELEASE_KEYSTORE_CREDENTIALS_DO_NOT_COMMIT.txt
+keystore.properties
