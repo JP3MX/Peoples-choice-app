@@ -180,6 +180,13 @@ def get_object(path: str):
     resp.raise_for_status()
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
+def delete_object(path: str) -> None:
+    """Best-effort permanent removal used by account deletion."""
+    key = init_storage()
+    resp = requests.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    if resp.status_code not in (200, 202, 204, 404):
+        resp.raise_for_status()
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -258,6 +265,15 @@ class SessionInput(BaseModel):
 class MessageInput(BaseModel):
     text: str
 
+class ReportInput(BaseModel):
+    message_id: str
+    session_id: str
+    reason: str = "unsafe_or_incorrect"
+    details: str = ""
+
+class DeleteAccountInput(BaseModel):
+    password: str
+
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
@@ -288,6 +304,66 @@ async def login(payload: LoginInput):
 @api_router.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return user
+
+@api_router.post("/reports")
+async def report_ai_response(payload: ReportInput, user: dict = Depends(get_current_user)):
+    message = await db.messages.find_one({
+        "id": payload.message_id,
+        "session_id": payload.session_id,
+        "user_id": user["id"],
+        "role": "assistant",
+    })
+    if not message:
+        raise HTTPException(status_code=404, detail="AI response not found")
+    report = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "message_id": payload.message_id,
+        "session_id": payload.session_id,
+        "reason": payload.reason[:100],
+        "details": payload.details[:2000],
+        "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ai_reports.insert_one(report)
+    report.pop("_id", None)
+    return {"ok": True, "report_id": report["id"]}
+
+@api_router.delete("/auth/account")
+async def delete_account(payload: DeleteAccountInput, user: dict = Depends(get_current_user)):
+    stored_user = await db.users.find_one({"_id": ObjectId(user["id"])})
+    if not stored_user or not verify_password(payload.password, stored_user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Password is incorrect")
+
+    subscription_id = stored_user.get("stripe_subscription_id")
+    if subscription_id and stripe.api_key and not stripe.api_key.startswith("sk_test_emergent"):
+        try:
+            await asyncio.to_thread(stripe.Subscription.cancel, subscription_id)
+        except stripe.error.StripeError as exc:
+            logger.error("Could not cancel Stripe subscription during account deletion: %s", exc)
+            raise HTTPException(status_code=502, detail="Subscription cancellation failed. Account was not deleted.")
+
+    owned_files = []
+    for collection_name in ("manuals", "media"):
+        docs = await db[collection_name].find({"user_id": user["id"]}, {"storage_path": 1}).to_list(10000)
+        owned_files.extend(d.get("storage_path") for d in docs if d.get("storage_path"))
+
+    for storage_path in owned_files:
+        try:
+            await asyncio.to_thread(delete_object, storage_path)
+        except Exception as exc:
+            logger.error("Could not delete stored object %s: %s", storage_path, exc)
+            raise HTTPException(status_code=502, detail="Stored-file deletion failed. Account was not deleted.")
+
+    user_collections = (
+        "aircraft", "manuals", "media", "logbook", "sessions", "messages",
+        "payment_transactions", "ai_reports",
+    )
+    for collection_name in user_collections:
+        await db[collection_name].delete_many({"user_id": user["id"]})
+    await db.password_reset_tokens.delete_many({"email": user["email"]})
+    await db.users.delete_one({"_id": ObjectId(user["id"])})
+    return {"ok": True}
 
 RESET_TTL_MIN = 30
 RESET_RATE_MAX = 3
@@ -1083,29 +1159,41 @@ async def startup():
     await db.password_reset_tokens.create_index("expires_at")
     await db.password_reset_tokens.create_index("token")
     await db.reset_attempts.create_index("ts")
-    admin_email = os.environ.get("ADMIN_EMAIL", "mechanic@squawkking.io")
-    admin_password = os.environ.get("ADMIN_PASSWORD", "squawk123")
-    existing = await db.users.find_one({"email": admin_email})
-    if existing is None:
-        await db.users.insert_one({"email": admin_email, "password_hash": hash_password(admin_password),
-                                   "name": "Lead Mechanic", "role": "admin",
-                                   "created_at": datetime.now(timezone.utc).isoformat()})
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    if bool(admin_email) != bool(admin_password):
+        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must either both be set or both be omitted")
+    admin = None
+    if admin_email:
+        if len(admin_password) < 16:
+            raise RuntimeError("ADMIN_PASSWORD must be at least 16 characters")
         existing = await db.users.find_one({"email": admin_email})
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
+        if existing is None:
+            result = await db.users.insert_one({
+                "email": admin_email,
+                "password_hash": hash_password(admin_password),
+                "name": "Lead Mechanic",
+                "role": "admin",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            admin = await db.users.find_one({"_id": result.inserted_id})
+        else:
+            admin = existing
+            if admin.get("role") != "admin":
+                await db.users.update_one({"_id": admin["_id"]}, {"$set": {"role": "admin"}})
 
     if await db.corpus.count_documents({}) == 0:
         await db.corpus.insert_many([dict(r, id=str(uuid.uuid4())) for r in HISTORICAL_RECORDS])
         logger.info("Seeded historical corpus")
 
-    # Seed starter aircraft for admin user
-    admin = await db.users.find_one({"email": admin_email})
-    admin_id = str(admin["_id"])
-    if await db.aircraft.count_documents({"user_id": admin_id}) == 0:
-        for a in STARTER_AIRCRAFT:
-            await db.aircraft.insert_one(dict(a, id=str(uuid.uuid4()), user_id=admin_id,
-                                              created_at=datetime.now(timezone.utc).isoformat()))
-        logger.info("Seeded starter aircraft")
+    # Seed starter aircraft only when an explicit admin account is configured.
+    if admin:
+        admin_id = str(admin["_id"])
+        if await db.aircraft.count_documents({"user_id": admin_id}) == 0:
+            for a in STARTER_AIRCRAFT:
+                await db.aircraft.insert_one(dict(a, id=str(uuid.uuid4()), user_id=admin_id,
+                                                  created_at=datetime.now(timezone.utc).isoformat()))
+            logger.info("Seeded starter aircraft")
 
     try:
         init_storage()
