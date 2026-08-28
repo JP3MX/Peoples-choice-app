@@ -64,7 +64,8 @@ Before production submission:
 - Complete Data Safety based on account, aircraft, chat, logbook, uploaded-file, billing, email, AI-provider, and diagnostic-log handling.
 - Put reviewer credentials only in Play Console App access instructions. Rotate the old reviewer password because it previously existed in repository history.
 - Complete Content rating, Ads declaration, Target audience, News/Health/Financial declarations as applicable.
-- Verify live registration, login, password reset, account deletion, manual/media download, and subscription entitlement on a physical Android device.
+- Verify live registration, login, password reset, account deletion, manual/media download, AI-response reporting, and subscription entitlement on a physical Android device.
+- If the Play developer account is a personal account created after November 13, 2023, complete a closed test with at least 12 continuously opted-in testers for 14 days before applying for production access.
 - Confirm Resend uses a production API key and verified sender domain.
 - Confirm Stripe is live for the website. Direct Stripe purchase UI is disabled in the Android app to avoid an unapproved in-app alternative billing flow.
 
