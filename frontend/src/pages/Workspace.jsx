@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen, KeyRound, Zap, UserCog,
+  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen, KeyRound, Zap, UserCog, Menu,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -17,7 +17,8 @@ export default function Workspace() {
   const [sessions, setSessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [aircraftList, setAircraftList] = useState([]);
-  const [showWorkbench, setShowWorkbench] = useState(true);
+  const [showWorkbench, setShowWorkbench] = useState(() => window.innerWidth >= 1024);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [acMenu, setAcMenu] = useState(false);
   const [showChangePw, setShowChangePw] = useState(false);
   const [billing, setBilling] = useState(null);
@@ -96,7 +97,7 @@ export default function Workspace() {
   return (
     <div className="h-screen w-full flex bg-background text-foreground overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border flex flex-col shrink-0">
+      <aside className={`w-64 border-r border-border flex flex-col shrink-0 bg-background h-full z-40 transition-transform md:relative md:translate-x-0 max-md:absolute ${showMobileNav ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="px-4 py-4 border-b border-border flex items-center gap-2.5">
           <div className="h-8 w-8 bg-accent flex items-center justify-center shrink-0">
             <Plane className="h-5 w-5 text-white" strokeWidth={2.5} />
@@ -180,7 +181,7 @@ export default function Workspace() {
             <button
               key={s.id}
               data-testid={`session-${s.id}`}
-              onClick={() => setActiveSession(s)}
+              onClick={() => { setActiveSession(s); setShowMobileNav(false); }}
               className={`w-full group flex items-center gap-2 px-3 py-2.5 text-left transition-colors border ${
                 activeSession?.id === s.id ? "border-accent/50 bg-accent/10" : "border-transparent hover:bg-secondary"
               }`}
@@ -215,8 +216,23 @@ export default function Workspace() {
         </div>
       </aside>
 
+      {showMobileNav && (
+        <button
+          aria-label="Close navigation"
+          onClick={() => setShowMobileNav(false)}
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+        />
+      )}
+
       {/* Center chat */}
       <main className="flex-1 min-w-0 flex flex-col relative">
+        <button
+          aria-label="Open navigation"
+          onClick={() => setShowMobileNav(true)}
+          className="absolute top-3 left-3 z-20 h-8 w-8 border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground md:hidden"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
         <button
           data-testid="toggle-workbench"
           onClick={() => setShowWorkbench(!showWorkbench)}
@@ -248,7 +264,7 @@ export default function Workspace() {
 
       {/* Right workbench */}
       {showWorkbench && (
-        <section className="w-[380px] shrink-0">
+        <section className="w-[380px] max-sm:w-full shrink-0 max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:shadow-2xl">
           <Workbench aircraft={activeAircraft} onAircraftSaved={onAircraftSaved} />
         </section>
       )}
