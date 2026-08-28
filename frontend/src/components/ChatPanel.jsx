@@ -83,7 +83,7 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
     })
       .then((r) => r.json())
       .then((data) => setMessages(Array.isArray(data) ? data : []));
-  }, [session?.id]);
+  }, [session]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
