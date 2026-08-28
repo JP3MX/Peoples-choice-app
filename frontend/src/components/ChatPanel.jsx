@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Send, Plane, AlertTriangle, FileText, History, ShieldCheck, Wrench, Cpu, ChevronDown } from "lucide-react";
+import { Send, Plane, AlertTriangle, FileText, History, ShieldCheck, Wrench, Cpu, ChevronDown, Flag } from "lucide-react";
 import { api, API, getToken } from "@/lib/api";
 import Markdown from "@/components/Markdown";
+import { toast } from "sonner";
 
 const STOP_MESSAGE =
   "Approved maintenance data required. Please provide or upload the applicable manual before continuing.";
@@ -166,6 +167,22 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
     setStreamMeta(null);
   };
 
+  const reportMessage = async (message) => {
+    const reason = window.prompt("Why are you reporting this AI response? Do not include private information.");
+    if (!reason?.trim()) return;
+    try {
+      await api.post("/reports", {
+        session_id: session.id,
+        message_id: message.id,
+        reason: reason.trim(),
+        content: message.content,
+      });
+      toast.success("AI response reported for review");
+    } catch {
+      toast.error("Report could not be submitted");
+    }
+  };
+
   const isConfirmed = aircraft && aircraft.confirmed;
 
   return (
@@ -278,6 +295,14 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
                 )}
                 <CitationRow citations={m.citations} />
                 <CorpusRow corpus={m.corpus} />
+                <button
+                  type="button"
+                  onClick={() => reportMessage(m)}
+                  className="mt-3 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-destructive"
+                  aria-label="Report AI response"
+                >
+                  <Flag className="h-3 w-3" /> Report response
+                </button>
               </div>
             )}
           </div>
