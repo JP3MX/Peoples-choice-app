@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plane, ArrowRight, Wrench } from "lucide-react";
+import { Plane, ArrowRight } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Capacitor } from "@capacitor/core";
@@ -227,11 +227,9 @@ export default function Login() {
             </button>
           )}
 
-          <div className="mt-8 border border-border bg-secondary/40 p-3 flex items-start gap-2">
-            <Wrench className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-            <p className="font-mono text-[11px] text-muted-foreground leading-relaxed">
-              Demo: mechanic@squawkking.io / squawk123
-            </p>
+          <div className="mt-8 flex justify-center gap-4 text-xs">
+            <a href="/privacy" className="text-muted-foreground hover:text-primary">Privacy</a>
+            <a href="/account-deletion" className="text-muted-foreground hover:text-primary">Delete account</a>
           </div>
         </form>
       </div>
