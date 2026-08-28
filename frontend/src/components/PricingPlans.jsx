@@ -3,11 +3,7 @@ import { Check, Loader2, Zap, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 
-const TIER_ACCENT = {
-  basic: "border-border",
-  pro: "border-primary",
-  unlimited: "border-accent",
-};
+const TIER_ACCENT = { full: "border-primary" };
 
 export default function PricingPlans({ compact = false, onDone }) {
   const [plans, setPlans] = useState([]);
@@ -62,24 +58,24 @@ export default function PricingPlans({ compact = false, onDone }) {
             : "Trial ended — choose a plan to keep troubleshooting"}
         </div>
       )}
-      <div className={`grid gap-4 ${compact ? "grid-cols-1" : "md:grid-cols-3"}`}>
+      <div className={`grid gap-4 ${compact ? "grid-cols-1" : "md:grid-cols-2"}`}>
         {plans.map((p) => {
           const isCurrent = currentTier === p.tier;
           return (
             <div
               key={p.lookup_key}
-              data-testid={`plan-card-${p.tier}`}
-              className={`border ${TIER_ACCENT[p.tier]} bg-card p-6 flex flex-col ${p.tier === "pro" ? "relative" : ""}`}
+              data-testid={`plan-card-${p.lookup_key}`}
+              className={`border ${TIER_ACCENT[p.tier]} bg-card p-6 flex flex-col ${p.period === "year" ? "relative" : ""}`}
             >
-              {p.tier === "pro" && (
+              {p.period === "year" && (
                 <span className="absolute -top-2.5 left-6 bg-primary text-white font-mono text-[9px] tracking-[0.2em] uppercase px-2 py-0.5">
-                  Popular
+                  Best Value
                 </span>
               )}
               <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-muted-foreground">{p.name}</p>
               <div className="mt-3 flex items-baseline gap-1">
                 <span className="font-head font-black text-4xl">${p.price}</span>
-                <span className="text-muted-foreground text-sm">/mo</span>
+                <span className="text-muted-foreground text-sm">/{p.period === "year" ? "yr" : "mo"}</span>
               </div>
               <ul className="mt-5 space-y-2 flex-1">
                 {p.features.map((f, i) => (
@@ -90,11 +86,11 @@ export default function PricingPlans({ compact = false, onDone }) {
                 ))}
               </ul>
               <button
-                data-testid={`subscribe-${p.tier}`}
+                data-testid={`subscribe-${p.lookup_key}`}
                 disabled={loadingKey || isCurrent}
                 onClick={() => subscribe(p.lookup_key)}
                 className={`mt-6 w-full py-3 font-mono text-xs tracking-[0.15em] uppercase flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${
-                  p.tier === "unlimited"
+                  p.period === "year"
                     ? "bg-accent text-white hover:bg-accent/90"
                     : "bg-primary text-white hover:bg-primary/90"
                 }`}
@@ -112,7 +108,7 @@ export default function PricingPlans({ compact = false, onDone }) {
         })}
       </div>
       <p className="mt-5 font-mono text-[10px] text-muted-foreground/60 text-center">
-        Test mode · use card 4242 4242 4242 4242, any future expiry, any CVC.
+        7-day full-access trial · cancel anytime.
       </p>
       {status?.can_manage && (
         <div className="mt-6 text-center">
