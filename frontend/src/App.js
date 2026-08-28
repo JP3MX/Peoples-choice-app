@@ -8,6 +8,8 @@ import Pricing from "@/pages/Pricing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import ResetPassword from "@/pages/ResetPassword";
+import Legal from "@/pages/Legal";
+import AccountSettings from "@/pages/AccountSettings";
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
@@ -32,6 +34,16 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/reset" element={<ResetPassword />} />
+            <Route path="/privacy" element={<Legal />} />
+            <Route path="/terms" element={<Legal />} />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <AccountSettings />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/pricing"
               element={
