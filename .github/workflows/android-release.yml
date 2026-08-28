@@ -76,7 +76,9 @@ jobs:
 
       - name: Run unit tests and build signed release bundle
         working-directory: frontend/android
-        run: ./gradlew --no-daemon testReleaseUnitTest bundleRelease
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testReleaseUnitTest bundleRelease
 
       - name: Verify bundle signature
         run: jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab
