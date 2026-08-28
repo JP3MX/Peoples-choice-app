@@ -180,6 +180,12 @@ def get_object(path: str):
     resp.raise_for_status()
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
+def delete_object(path: str):
+    key = init_storage()
+    resp = requests.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    if resp.status_code not in (200, 202, 204, 404):
+        resp.raise_for_status()
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -231,6 +237,10 @@ class RegisterInput(BaseModel):
 class LoginInput(BaseModel):
     email: EmailStr
     password: str
+
+class DeleteAccountInput(BaseModel):
+    password: Optional[str] = None
+    confirm: str
 
 class AircraftInput(BaseModel):
     tail_number: str = ""
@@ -288,6 +298,54 @@ async def login(payload: LoginInput):
 @api_router.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return user
+
+@api_router.delete("/auth/account")
+async def delete_account(payload: DeleteAccountInput, user: dict = Depends(get_current_user)):
+    if payload.confirm != "DELETE":
+        raise HTTPException(status_code=400, detail='Type DELETE to confirm account deletion')
+    if user.get("role") == "admin":
+        raise HTTPException(status_code=403, detail="Administrative reviewer accounts cannot be deleted here")
+
+    uid = user["id"]
+    account = await db.users.find_one({"_id": ObjectId(uid)})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    password_hash = account.get("password_hash")
+    if password_hash and (not payload.password or not verify_password(payload.password, password_hash)):
+        raise HTTPException(status_code=401, detail="Password is incorrect")
+
+    # Stop paid service first so deleting the account cannot leave an active charge.
+    customer_id = account.get("stripe_customer_id")
+    if customer_id:
+        try:
+            await asyncio.to_thread(stripe.Customer.delete, customer_id)
+        except Exception as exc:
+            logger.error(f"Stripe customer deletion failed for {uid}: {exc}")
+            raise HTTPException(status_code=502, detail="Could not cancel billing. Account was not deleted; try again.")
+
+    # Permanently remove uploaded objects before removing their database records.
+    stored_records = []
+    stored_records.extend(await db.manuals.find({"user_id": uid}, {"storage_path": 1}).to_list(10000))
+    stored_records.extend(await db.media.find({"user_id": uid}, {"storage_path": 1}).to_list(10000))
+    try:
+        for record in stored_records:
+            if record.get("storage_path"):
+                delete_object(record["storage_path"])
+    except Exception as exc:
+        logger.error(f"Storage deletion failed for {uid}: {exc}")
+        raise HTTPException(status_code=502, detail="Could not delete stored files. Account was not deleted; try again.")
+
+    await db.messages.delete_many({"user_id": uid})
+    await db.sessions.delete_many({"user_id": uid})
+    await db.logbook.delete_many({"user_id": uid})
+    await db.manuals.delete_many({"user_id": uid})
+    await db.media.delete_many({"user_id": uid})
+    await db.aircraft.delete_many({"user_id": uid})
+    await db.payment_transactions.delete_many({"user_id": uid})
+    await db.password_reset_tokens.delete_many({"email": user["email"]})
+    await db.reset_attempts.delete_many({"email": user["email"]})
+    await db.users.delete_one({"_id": ObjectId(uid)})
+    return {"ok": True, "deleted": True}
 
 RESET_TTL_MIN = 30
 RESET_RATE_MAX = 3
