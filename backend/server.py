@@ -268,6 +268,12 @@ class SessionInput(BaseModel):
 class MessageInput(BaseModel):
     text: str
 
+class AIReportInput(BaseModel):
+    session_id: str
+    message_id: Optional[str] = None
+    reason: str
+    content: Optional[str] = None
+
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
@@ -342,6 +348,7 @@ async def delete_account(payload: DeleteAccountInput, user: dict = Depends(get_c
     await db.media.delete_many({"user_id": uid})
     await db.aircraft.delete_many({"user_id": uid})
     await db.payment_transactions.delete_many({"user_id": uid})
+    await db.ai_reports.delete_many({"user_id": uid})
     await db.password_reset_tokens.delete_many({"email": user["email"]})
     await db.reset_attempts.delete_many({"email": user["email"]})
     await db.users.delete_one({"_id": ObjectId(uid)})
@@ -783,6 +790,31 @@ async def create_logbook(payload: LogbookInput, user: dict = Depends(get_current
 async def delete_logbook(entry_id: str, user: dict = Depends(get_current_user)):
     await db.logbook.delete_one({"id": entry_id, "user_id": user["id"]})
     return {"ok": True}
+
+# ---------------------------------------------------------------------------
+# AI content reports
+# ---------------------------------------------------------------------------
+@api_router.post("/reports")
+async def report_ai_content(payload: AIReportInput, user: dict = Depends(get_current_user)):
+    session = await db.sessions.find_one({"id": payload.session_id, "user_id": user["id"]})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="A report reason is required")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "session_id": payload.session_id,
+        "message_id": payload.message_id,
+        "reason": reason[:1000],
+        "content": (payload.content or "")[:10000],
+        "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ai_reports.insert_one(doc)
+    logger.warning(f"AI content report received: {doc['id']} session={payload.session_id}")
+    return {"ok": True, "report_id": doc["id"]}
 
 # ---------------------------------------------------------------------------
 # Chat sessions
