@@ -20,6 +20,8 @@ import pytest
 
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
+DEMO_EMAIL = os.environ["DEMO_EMAIL"]
+DEMO_PASSWORD = os.environ["DEMO_PASSWORD"]
 
 
 def _fresh_email():
@@ -164,11 +166,11 @@ class TestChangePasswordRegression:
 
 class TestLoginRegistrationRegression:
     def test_demo_login(self, s):
-        r = s.post(f"{API}/auth/login", json={"email": "mechanic@squawkking.io", "password": "squawk123"})
+        r = s.post(f"{API}/auth/login", json={"email": DEMO_EMAIL, "password": DEMO_PASSWORD})
         assert r.status_code == 200, r.text
         data = r.json()
         assert "token" in data
-        assert data["user"]["email"] == "mechanic@squawkking.io"
+        assert data["user"]["email"] == DEMO_EMAIL
 
     def test_register_new_user(self, s):
         email = _fresh_email()
