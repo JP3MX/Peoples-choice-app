@@ -57,7 +57,7 @@ export default function PricingPlans({ compact = false, onDone }) {
       <div className="border border-border bg-card p-6 space-y-3">
         <p className="font-head font-bold text-xl">Account subscription</p>
         <p className="text-sm text-muted-foreground">
-          Purchases are not available inside the Android app. Existing subscriptions remain active and may be managed through the Squawk King IA website.
+          Purchases and subscription management are not available inside the Android app. Existing subscriptions remain active.
         </p>
         {currentTier && currentTier !== "none" && (
           <p className="font-mono text-xs uppercase text-primary">Current plan: {currentTier}</p>
