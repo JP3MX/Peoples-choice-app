@@ -188,7 +188,7 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
   return (
     <div className="flex flex-col h-full bg-background">
       {/* status strip */}
-      <div className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
+      <div className="border-b border-border pl-14 pr-12 sm:px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <Wrench className="h-4 w-4 text-accent shrink-0" />
           <div className="min-w-0">
@@ -200,7 +200,7 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* model selector */}
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <button
               data-testid="model-selector"
               onClick={() => setModelMenu(!modelMenu)}
@@ -241,7 +241,7 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
             data-testid="applicability-status"
           >
             {isConfirmed ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-            {isConfirmed ? "Applicability Confirmed" : "Preliminary Only"}
+            <span className="hidden sm:inline">{isConfirmed ? "Applicability Confirmed" : "Preliminary Only"}</span>
           </div>
         </div>
       </div>
