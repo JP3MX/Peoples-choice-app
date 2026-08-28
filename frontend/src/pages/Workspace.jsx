@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen, KeyRound, Zap,
+  Plane, Plus, MessageSquare, Trash2, LogOut, ChevronDown, PanelRightClose, PanelRightOpen, KeyRound, Zap, UserCog,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -202,6 +202,9 @@ export default function Workspace() {
             <p className="font-mono text-[10px] text-muted-foreground truncate">{user?.email}</p>
           </div>
           <div className="flex items-center gap-1">
+            <button data-testid="account-settings-btn" onClick={() => navigate("/account")} title="Account settings" className="text-muted-foreground hover:text-primary transition-colors p-1">
+              <UserCog className="h-4 w-4" />
+            </button>
             <button data-testid="change-password-btn" onClick={() => setShowChangePw(true)} title="Change password" className="text-muted-foreground hover:text-primary transition-colors p-1">
               <KeyRound className="h-4 w-4" />
             </button>
