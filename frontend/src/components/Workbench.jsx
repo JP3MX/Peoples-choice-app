@@ -43,7 +43,7 @@ function Field({ label, value, onChange, placeholder, mono = true, testid }) {
 
 function AircraftTab({ aircraft, onSaved }) {
   const [form, setForm] = useState(aircraft || {});
-  useEffect(() => setForm(aircraft || {}), [aircraft?.id]);
+  useEffect(() => setForm(aircraft || {}), [aircraft]);
   if (!aircraft) return <Empty text="Select or create an aircraft from the left rail." />;
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
@@ -109,7 +109,7 @@ function ManualsTab({ aircraft }) {
   const load = useCallback(() => {
     const q = aircraft ? `?aircraft_id=${aircraft.id}` : "";
     api.get(`/manuals${q}`).then((r) => setManuals(r.data));
-  }, [aircraft?.id]);
+  }, [aircraft]);
   useEffect(() => { load(); }, [load]);
 
   const upload = async (e) => {
@@ -230,7 +230,7 @@ function LogbookTab({ aircraft }) {
   const load = useCallback(() => {
     const q = aircraft ? `?aircraft_id=${aircraft.id}` : "";
     api.get(`/logbook${q}`).then((r) => setEntries(r.data));
-  }, [aircraft?.id]);
+  }, [aircraft]);
   useEffect(() => { load(); }, [load]);
 
   const save = async () => {
@@ -325,7 +325,7 @@ function MediaTab({ aircraft }) {
   const load = useCallback(() => {
     const q = aircraft ? `?aircraft_id=${aircraft.id}` : "";
     api.get(`/media${q}`).then((r) => setItems(r.data));
-  }, [aircraft?.id]);
+  }, [aircraft]);
   useEffect(() => { load(); }, [load]);
 
   const upload = async (e) => {
