@@ -28,8 +28,7 @@ export default function Pricing() {
           Troubleshoot without limits
         </h1>
         <p className="text-muted-foreground max-w-xl mb-12">
-          Every account starts with a 3-day free trial of full troubleshooting. After that, pick the tier that fits
-          your bench. Cancel anytime.
+          Every account starts with a 7-day free trial of full troubleshooting. Then continue monthly or save with annual billing. Cancel anytime.
         </p>
         <PricingPlans />
       </div>
