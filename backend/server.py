@@ -1002,15 +1002,17 @@ async def stream_chat(session_id: str, user: dict, text: str):
         except Exception as e:
             logger.error(f"LLM stream error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': 'AI generation failed: ' + str(e)})}\n\n"
+        assistant_message_id = None
         if full.strip():
-            await db.messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "user_id": user["id"],
+            assistant_message_id = str(uuid.uuid4())
+            await db.messages.insert_one({"id": assistant_message_id, "session_id": session_id, "user_id": user["id"],
                                           "role": "assistant", "content": full,
                                           "citations": citations, "corpus": meta["corpus"],
                                           "created_at": datetime.now(timezone.utc).isoformat()})
             await db.sessions.update_one({"id": session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
             if ent["plan"] in TIER_LIMITS and TIER_LIMITS.get(ent["plan"]) is not None:
                 await db.users.update_one({"email": user["email"]}, {"$inc": {"tokens_used": 1}})
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'message_id': assistant_message_id})}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
