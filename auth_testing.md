@@ -45,4 +45,4 @@ Then: `curl $API/api/auth/me -H "Authorization: Bearer <APP_JWT>"` -> returns th
 ## Test Identity Tracking
 - Google test app user (email): google.tester@example.com (auth_provider=google, role=mechanic)
 - No app password stored for Google users (OAuth). They may use forgot-password to set one.
-- Existing email/password + reviewer/admin: mechanic@squawkking.io / squawk123 (unchanged).
+- Reviewer credentials are supplied through the deployment environment and Play Console review notes; they are not stored in source control.
