@@ -8,6 +8,9 @@ import Pricing from "@/pages/Pricing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import ResetPassword from "@/pages/ResetPassword";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import AccountDeletionInfo from "@/pages/AccountDeletionInfo";
+import AccountSettings from "@/pages/AccountSettings";
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
@@ -32,6 +35,16 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/reset" element={<ResetPassword />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/account-deletion" element={<AccountDeletionInfo />} />
+            <Route
+              path="/account"
+              element={
+                <ProtectedRoute>
+                  <AccountSettings />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/pricing"
               element={
