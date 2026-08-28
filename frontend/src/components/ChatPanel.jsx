@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Send, Plane, AlertTriangle, FileText, History, ShieldCheck, Wrench, Cpu, ChevronDown } from "lucide-react";
+import { Send, Plane, AlertTriangle, FileText, History, ShieldCheck, Wrench, Cpu, ChevronDown, Flag } from "lucide-react";
+import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 
@@ -100,6 +101,7 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
 
     let acc = "";
     let meta = null;
+    let persistedMessageId = null;
     try {
       const res = await fetch(`${API}/sessions/${session.id}/message`, {
         method: "POST",
@@ -149,6 +151,8 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
           } else if (evt.type === "error") {
             acc += `\n\n**Error:** ${evt.content}`;
             setStreamText(acc);
+          } else if (evt.type === "done") {
+            persistedMessageId = evt.message_id || null;
           }
         }
       }
@@ -159,11 +163,30 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
     }
     setMessages((m) => [
       ...m,
-      { role: "assistant", content: acc, citations: meta?.citations, corpus: meta?.corpus, id: `a-${Date.now()}` },
+      { role: "assistant", content: acc, citations: meta?.citations, corpus: meta?.corpus, id: persistedMessageId || `a-${Date.now()}` },
     ]);
     setStreaming(false);
     setStreamText("");
     setStreamMeta(null);
+  };
+
+  const reportResponse = async (message) => {
+    if (!message?.id || message.id.startsWith("a-")) {
+      toast.error("Reload this session, then report the response");
+      return;
+    }
+    const details = window.prompt("Optional: what is unsafe or incorrect about this response?") || "";
+    try {
+      await api.post("/reports", {
+        message_id: message.id,
+        session_id: session.id,
+        reason: "unsafe_or_incorrect",
+        details,
+      });
+      toast.success("Response reported for review");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not submit report");
+    }
   };
 
   const isConfirmed = aircraft && aircraft.confirmed;
@@ -278,6 +301,14 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
                 )}
                 <CitationRow citations={m.citations} />
                 <CorpusRow corpus={m.corpus} />
+                <button
+                  type="button"
+                  onClick={() => reportResponse(m)}
+                  className="mt-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:text-accent flex items-center gap-1"
+                  title="Report unsafe or incorrect AI output"
+                >
+                  <Flag className="h-3 w-3" /> Report response
+                </button>
               </div>
             )}
           </div>
