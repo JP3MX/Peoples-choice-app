@@ -1,0 +1,85 @@
+name: Android release verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/android-release.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/android-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-release-build:
+    runs-on: ubuntu-latest
+    env:
+      REACT_APP_BACKEND_URL: ${{ vars.REACT_APP_BACKEND_URL }}
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Validate production backend URL
+        run: |
+          if [[ ! "$REACT_APP_BACKEND_URL" =~ ^https:// ]]; then
+            echo "::error::Set repository variable REACT_APP_BACKEND_URL to the production HTTPS backend."
+            exit 1
+          fi
+
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Sync Capacitor project
+        run: npx cap sync android
+
+      - name: Create disposable CI signing key
+        run: |
+          keytool -genkeypair -v             -keystore android/ci-release.keystore             -storepass ci-password             -alias ci-release             -keypass ci-password             -keyalg RSA -keysize 2048 -validity 1             -dname "CN=CI Build, OU=CI, O=JP3 Aviation, L=Conroe, ST=Texas, C=US"
+          {
+            echo "storeFile=../ci-release.keystore"
+            echo "storePassword=ci-password"
+            echo "keyAlias=ci-release"
+            echo "keyPassword=ci-password"
+          } > android/keystore.properties
+
+      - name: Run unit tests and build signed release bundle
+        working-directory: frontend/android
+        run: ./gradlew --no-daemon testReleaseUnitTest bundleRelease
+
+      - name: Verify bundle signature
+        run: jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload verified AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: peoples-choice-release-verification
+          path: frontend/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
