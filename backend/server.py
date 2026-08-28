@@ -61,25 +61,21 @@ ALLOWED_MODEL_IDS = {m["id"] for m in OPENAI_MODELS}
 DEFAULT_MODEL = "gpt-5.4"
 
 # --- Billing / subscription config ---
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-TRIAL_DAYS = 3
+TRIAL_DAYS = 7
 
 PLANS = [
-    {"lookup_key": "sk_basic_monthly", "tier": "basic", "name": "Basic",
-     "price": 19, "tokens": 5,
-     "features": ["5 troubleshooting tokens / month", "Unlimited aircraft profiles",
-                  "Manual uploads & ATA citations", "Logbook & media"]},
-    {"lookup_key": "sk_pro_monthly", "tier": "pro", "name": "Pro",
-     "price": 39, "tokens": 50,
-     "features": ["50 troubleshooting tokens / month", "Everything in Basic",
-                  "Priority historical-corpus matching", "Model selector (GPT-5.x)"]},
-    {"lookup_key": "sk_unlimited_monthly", "tier": "unlimited", "name": "Unlimited",
-     "price": 79, "tokens": None,
-     "features": ["Unlimited troubleshooting guidance", "Everything in Pro",
-                  "Best for busy shops & multi-mechanic use"]},
+    {"lookup_key": "sk_full_monthly", "tier": "full", "name": "Monthly",
+     "price": 19, "period": "month", "tokens": None,
+     "features": ["Full troubleshooting access", "Unlimited aircraft profiles",
+                  "Manual uploads & ATA citations", "Logbook, history & media"]},
+    {"lookup_key": "sk_full_annual", "tier": "full", "name": "Annual",
+     "price": 190, "period": "year", "tokens": None,
+     "features": ["Full troubleshooting access", "Two months free versus monthly",
+                  "Manual uploads & ATA citations", "Logbook, history & media"]},
 ]
-TIER_LIMITS = {p["tier"]: p["tokens"] for p in PLANS}
+TIER_LIMITS = {"full": None}
 LOOKUP_TIER = {p["lookup_key"]: p["tier"] for p in PLANS}
 
 def _parse_dt(s):
@@ -98,7 +94,7 @@ async def get_entitlement(email: str) -> dict:
         return {"plan": "none", "trial_active": False, "allowed": False, "limit": 0,
                 "used": 0, "remaining": 0, "trial_days_left": 0, "status": "expired"}
     if doc.get("role") == "admin":
-        return {"plan": "unlimited", "trial_active": False, "allowed": True, "limit": None,
+        return {"plan": "full", "trial_active": False, "allowed": True, "limit": None,
                 "used": 0, "remaining": None, "trial_days_left": 0, "status": "active"}
     tier = doc.get("tier")
     if tier in TIER_LIMITS and doc.get("subscription_status") == "active":
@@ -1043,6 +1039,8 @@ async def billing_status(user: dict = Depends(get_current_user)):
 
 @api_router.post("/payments/checkout")
 async def create_checkout(req: CheckoutRequest, user: dict = Depends(get_current_user)):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Payments are not configured")
     if req.lookup_key not in LOOKUP_TIER:
         raise HTTPException(status_code=400, detail="Unknown plan")
     prices = await asyncio.to_thread(
