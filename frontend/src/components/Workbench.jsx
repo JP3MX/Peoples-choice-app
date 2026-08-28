@@ -16,6 +16,16 @@ const TABS = [
 
 const DOC_TYPES = ["AMM", "Service Manual", "ICA", "Wiring Diagram", "TCDS", "AD", "Mfr Troubleshooting"];
 
+async function openAuthenticatedFile(path) {
+  const response = await fetch(`${API}${path}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!response.ok) throw new Error("Download failed");
+  const url = URL.createObjectURL(await response.blob());
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 function Field({ label, value, onChange, placeholder, mono = true, testid }) {
   return (
     <div>
@@ -127,7 +137,7 @@ function ManualsTab({ aircraft }) {
   };
 
   const del = async (id) => { await api.delete(`/manuals/${id}`); load(); };
-  const open = (id) => window.open(`${API}/manuals/${id}/download?auth=${getToken()}`, "_blank");
+  const open = (id) => openAuthenticatedFile(`/manuals/${id}/download`).catch(() => toast.error("Download failed"));
 
   return (
     <div className="p-5 space-y-4" data-testid="manuals-tab">
@@ -341,7 +351,7 @@ function MediaTab({ aircraft }) {
   };
 
   const del = async (id) => { await api.delete(`/media/${id}`); load(); };
-  const open = (id) => window.open(`${API}/media/${id}/download?auth=${getToken()}`, "_blank");
+  const open = (id) => openAuthenticatedFile(`/media/${id}/download`).catch(() => toast.error("Download failed"));
 
   return (
     <div className="p-5 space-y-4" data-testid="media-tab">
