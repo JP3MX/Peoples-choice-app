@@ -642,19 +642,8 @@ async def delete_manual(manual_id: str, user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 @api_router.get("/manuals/{manual_id}/download")
-async def download_manual(manual_id: str, authorization: str = Header(None), auth: str = Query(None)):
-    token = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
-    elif auth:
-        token = auth
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=[JWT_ALGORITHM])
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    record = await db.manuals.find_one({"id": manual_id, "user_id": payload["sub"], "is_deleted": False})
+async def download_manual(manual_id: str, user: dict = Depends(get_current_user)):
+    record = await db.manuals.find_one({"id": manual_id, "user_id": user["id"], "is_deleted": False})
     if not record:
         raise HTTPException(status_code=404, detail="Manual not found")
     data, content_type = get_object(record["storage_path"])
@@ -709,19 +698,8 @@ async def delete_media(media_id: str, user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 @api_router.get("/media/{media_id}/download")
-async def download_media(media_id: str, authorization: str = Header(None), auth: str = Query(None)):
-    token = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
-    elif auth:
-        token = auth
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=[JWT_ALGORITHM])
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    record = await db.media.find_one({"id": media_id, "user_id": payload["sub"], "is_deleted": False})
+async def download_media(media_id: str, user: dict = Depends(get_current_user)):
+    record = await db.media.find_one({"id": media_id, "user_id": user["id"], "is_deleted": False})
     if not record:
         raise HTTPException(status_code=404, detail="Media not found")
     data, content_type = get_object(record["storage_path"])
