@@ -1,6 +1,11 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
+if (!/^https:\/\//i.test(BACKEND_URL)) {
+  throw new Error(
+    "REACT_APP_BACKEND_URL must be set to the production HTTPS backend before building the app.",
+  );
+}
 export const API = `${BACKEND_URL}/api`;
 
 export const api = axios.create({ baseURL: API });
