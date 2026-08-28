@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Check, Loader2, Zap, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
+import { Capacitor } from "@capacitor/core";
 
 const TIER_ACCENT = {
   basic: "border-border",
@@ -49,6 +50,21 @@ export default function PricingPlans({ compact = false, onDone }) {
   };
 
   const currentTier = status?.plan;
+  const nativeApp = Capacitor.isNativePlatform();
+
+  if (nativeApp) {
+    return (
+      <div className="border border-border bg-card p-6 space-y-3">
+        <p className="font-head font-bold text-xl">Account subscription</p>
+        <p className="text-sm text-muted-foreground">
+          Purchases are not available inside the Android app. Existing subscriptions remain active and may be managed through the Squawk King IA website.
+        </p>
+        {currentTier && currentTier !== "none" && (
+          <p className="font-mono text-xs uppercase text-primary">Current plan: {currentTier}</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -111,9 +127,6 @@ export default function PricingPlans({ compact = false, onDone }) {
           );
         })}
       </div>
-      <p className="mt-5 font-mono text-[10px] text-muted-foreground/60 text-center">
-        Test mode · use card 4242 4242 4242 4242, any future expiry, any CVC.
-      </p>
       {status?.can_manage && (
         <div className="mt-6 text-center">
           <button
