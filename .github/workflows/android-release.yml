@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "frontend/**"
+      - "backend/**"
       - ".github/workflows/android-release.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "backend/**"
       - ".github/workflows/android-release.yml"
   workflow_dispatch:
 
@@ -49,6 +51,9 @@ jobs:
 
       - name: Install Android SDK 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Validate backend Python syntax
+        run: python -m py_compile ../backend/server.py
 
       - name: Install exact dependencies
         run: npm ci
