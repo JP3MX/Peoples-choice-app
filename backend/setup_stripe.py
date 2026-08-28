@@ -1,79 +1,57 @@
-"""Idempotent Stripe catalog setup for Squawk King IA subscription tiers.
-Run: python setup_stripe.py
+"""Create the Squawk King IA Stripe product and monthly/annual prices.
+
+Before running, configure the business address and tax registrations in the
+Stripe Dashboard. This script never invents or overwrites business identity.
 """
 import os
-from dotenv import load_dotenv
 from pathlib import Path
+from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 import stripe
 
 stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
 
-# Digital SaaS subscriptions. Tax code: SaaS.
-CATALOG = [
-    {
-        "emergent_product_id": "sk_basic",
-        "name": "Squawk King — Basic",
-        "tax_code": "txcd_10103001",
-        "prices": [{"lookup_key": "sk_basic_monthly", "amount": 1900, "currency": "usd", "interval": "month"}],
-    },
-    {
-        "emergent_product_id": "sk_pro",
-        "name": "Squawk King — Pro",
-        "tax_code": "txcd_10103001",
-        "prices": [{"lookup_key": "sk_pro_monthly", "amount": 3900, "currency": "usd", "interval": "month"}],
-    },
-    {
-        "emergent_product_id": "sk_unlimited",
-        "name": "Squawk King — Unlimited",
-        "tax_code": "txcd_10103001",
-        "prices": [{"lookup_key": "sk_unlimited_monthly", "amount": 7900, "currency": "usd", "interval": "month"}],
-    },
+PRODUCT_KEY = "squawk_king_full"
+PRICES = [
+    {"lookup_key": "sk_full_monthly", "amount": 1900, "interval": "month"},
+    {"lookup_key": "sk_full_annual", "amount": 19000, "interval": "year"},
 ]
 
 
-def ensure_tax_settings():
-    s = stripe.tax.Settings.retrieve()
-    if s.head_office and getattr(s.head_office, "address", None):
-        return
-    stripe.tax.Settings.modify(
-        head_office={"address": {"country": "US", "line1": "1 Hangar Row",
-                                 "city": "Wichita", "state": "KS", "postal_code": "67209"}},
-        defaults={"tax_behavior": "exclusive"},
-    )
-
-
-def get_or_create_product(entry):
-    for p in stripe.Product.list(active=True).auto_paging_iter():
-        if p.to_dict().get("metadata", {}).get("emergent_product_id") == entry["emergent_product_id"]:
-            return p
+def get_or_create_product():
+    for product in stripe.Product.list(active=True).auto_paging_iter():
+        if product.to_dict().get("metadata", {}).get("product_key") == PRODUCT_KEY:
+            return product
     return stripe.Product.create(
-        name=entry["name"], tax_code=entry.get("tax_code"),
-        metadata={"managed_by": "emergent", "emergent_product_id": entry["emergent_product_id"]},
+        name="Squawk King IA",
+        tax_code="txcd_10103001",
+        metadata={"managed_by": "jp3aviation", "product_key": PRODUCT_KEY},
     )
 
 
 def main():
-    try:
-        ensure_tax_settings()
-    except Exception as e:
-        print("tax settings:", e)
-    for entry in CATALOG:
-        product = get_or_create_product(entry)
-        for p in entry["prices"]:
-            existing = stripe.Price.list(lookup_keys=[p["lookup_key"]], active=True, limit=1).data
-            if existing and (existing[0].unit_amount != p["amount"] or existing[0].currency != p["currency"]):
-                stripe.Price.modify(existing[0].id, active=False)
-                existing = []
-            if not existing:
-                kwargs = dict(product=product.id, unit_amount=p["amount"], currency=p["currency"],
-                              lookup_key=p["lookup_key"], transfer_lookup_key=True,
-                              recurring={"interval": p["interval"]})
-                stripe.Price.create(**kwargs)
-                print("created price", p["lookup_key"])
-            else:
-                print("exists", p["lookup_key"])
+    product = get_or_create_product()
+    for desired in PRICES:
+        prices = stripe.Price.list(
+            lookup_keys=[desired["lookup_key"]], active=True, limit=1
+        ).data
+        matching = prices and prices[0].unit_amount == desired["amount"] and prices[0].currency == "usd"
+        if prices and not matching:
+            stripe.Price.modify(prices[0].id, active=False)
+            prices = []
+        if not prices:
+            stripe.Price.create(
+                product=product.id,
+                unit_amount=desired["amount"],
+                currency="usd",
+                lookup_key=desired["lookup_key"],
+                transfer_lookup_key=True,
+                recurring={"interval": desired["interval"]},
+            )
+            print("created", desired["lookup_key"])
+        else:
+            print("exists", desired["lookup_key"])
     print("catalog ready")
 
 
