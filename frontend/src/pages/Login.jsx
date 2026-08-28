@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plane, ArrowRight, Wrench } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { Capacitor } from "@capacitor/core";
 
 export default function Login() {
   const [mode, setMode] = useState("login"); // login | register | forgot | reset
@@ -186,7 +187,7 @@ export default function Login() {
             {!loading && <ArrowRight className="h-4 w-4" />}
           </button>
 
-          {(mode === "login" || mode === "register") && (
+          {(mode === "login" || mode === "register") && !Capacitor.isNativePlatform() && (
             <>
               <div className="flex items-center gap-3 my-5">
                 <div className="h-px bg-border flex-1" />
