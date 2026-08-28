@@ -23,8 +23,8 @@ from bson import ObjectId
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
-DEMO_EMAIL = "mechanic@squawkking.io"
-DEMO_PASSWORD = "squawk123"
+DEMO_EMAIL = os.environ["DEMO_EMAIL"]
+DEMO_PASSWORD = os.environ["DEMO_PASSWORD"]
 
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "test_database")
