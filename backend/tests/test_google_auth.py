@@ -31,8 +31,8 @@ BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 JWT_SECRET = os.environ["JWT_SECRET"]
 
-DEMO_EMAIL = "mechanic@squawkking.io"
-DEMO_PASSWORD = "squawk123"
+DEMO_EMAIL = os.environ["DEMO_EMAIL"]
+DEMO_PASSWORD = os.environ["DEMO_PASSWORD"]
 
 GOOGLE_EMAIL = "google.tester@example.com"
 
