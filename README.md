@@ -48,7 +48,27 @@ Upload only:
 
 `frontend/android/app/build/outputs/bundle/release/app-release.aab`
 
-Do not upload the CI artifact to production. CI uses a disposable signing key and may use a non-routable backend URL when the repository variable is absent.
+Do not upload the verification artifact to production. Verification mode uses a disposable signing key and may use a non-routable backend URL when the repository variable is absent.
+
+### Production GitHub release build
+
+The Android workflow now has two manual modes:
+
+- `verification`: disposable CI key; proves the project builds and the AAB is signed.
+- `production`: requires the real upload key and a real HTTPS backend; produces the Play-upload candidate.
+
+Set repository variable:
+
+- `REACT_APP_BACKEND_URL`
+
+Set these GitHub Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64` — base64-encoded permanent upload keystore
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Then run **Android release verification** manually with `release_mode=production`. Production mode fails closed if the backend URL or any signing secret is missing. It also checks that People's Choice remains package `com.jp3aviation.peopleschoice` and rejects accidental contamination with the separate Squawk King package ID.
 
 For every subsequent Play release, increase `versionCode` in `frontend/android/app/build.gradle`. Never reuse a previously uploaded version code.
 
