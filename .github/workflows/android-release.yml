@@ -13,6 +13,15 @@ on:
       - "backend/**"
       - ".github/workflows/android-release.yml"
   workflow_dispatch:
+    inputs:
+      release_mode:
+        description: "verification = disposable key; production = permanent upload key"
+        required: true
+        default: verification
+        type: choice
+        options:
+          - verification
+          - production
 
 permissions:
   contents: read
@@ -21,7 +30,12 @@ jobs:
   signed-release-build:
     runs-on: ubuntu-latest
     env:
-      REACT_APP_BACKEND_URL: ${{ vars.REACT_APP_BACKEND_URL || 'https://release-verification.invalid' }}
+      RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.release_mode || 'verification' }}
+      REACT_APP_BACKEND_URL: ${{ vars.REACT_APP_BACKEND_URL }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     defaults:
       run:
         working-directory: frontend
@@ -43,10 +57,36 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Report backend configuration
+      - name: Validate release configuration
+        shell: bash
         run: |
-          if [[ "$REACT_APP_BACKEND_URL" == "https://release-verification.invalid" ]]; then
-            echo "::warning::Build verification is using a non-routable URL. Set repository variable REACT_APP_BACKEND_URL before producing the Play upload bundle."
+          set -euo pipefail
+
+          grep -q "appId: 'com.jp3aviation.peopleschoice'" capacitor.config.ts
+          grep -q 'applicationId "com.jp3aviation.peopleschoice"' android/app/build.gradle
+
+          if grep -R --line-number --exclude-dir=.git             "com.jp3aviation.squawkking" capacitor.config.ts android/app android/gradle.properties; then
+            echo "::error::People's Choice Android package is contaminated with the separate Squawk King package ID."
+            exit 1
+          fi
+
+          if [[ "$RELEASE_MODE" == "production" ]]; then
+            if [[ -z "${REACT_APP_BACKEND_URL:-}" || "$REACT_APP_BACKEND_URL" != https://* ]]; then
+              echo "::error::Production release requires repository variable REACT_APP_BACKEND_URL set to a real HTTPS backend."
+              exit 1
+            fi
+            for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+              if [[ -z "${!name:-}" ]]; then
+                echo "::error::Production release is missing required GitHub secret: $name"
+                exit 1
+              fi
+            done
+          else
+            if [[ -z "${REACT_APP_BACKEND_URL:-}" ]]; then
+              export REACT_APP_BACKEND_URL="https://release-verification.invalid"
+              echo "REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL" >> "$GITHUB_ENV"
+              echo "::warning::Verification build is using a non-routable backend URL."
+            fi
           fi
 
       - name: Install Android SDK 36
@@ -64,21 +104,33 @@ jobs:
       - name: Sync Capacitor project
         run: npx cap sync android
 
-      - name: Create disposable CI signing key
+      - name: Configure release signing
+        shell: bash
         run: |
-          keytool -genkeypair -v             -keystore android/ci-release.keystore             -storepass ci-password             -alias ci-release             -keypass ci-password             -keyalg RSA -keysize 2048 -validity 1             -dname "CN=CI Build, OU=CI, O=JP3 Aviation, L=Conroe, ST=Texas, C=US"
-          {
-            echo "storeFile=../ci-release.keystore"
-            echo "storePassword=ci-password"
-            echo "keyAlias=ci-release"
-            echo "keyPassword=ci-password"
-          } > android/keystore.properties
+          set -euo pipefail
+          if [[ "$RELEASE_MODE" == "production" ]]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/upload-release.keystore
+            {
+              echo "storeFile=../upload-release.keystore"
+              echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+              echo "keyAlias=$ANDROID_KEY_ALIAS"
+              echo "keyPassword=$ANDROID_KEY_PASSWORD"
+            } > android/keystore.properties
+          else
+            keytool -genkeypair -v               -keystore android/ci-release.keystore               -storepass ci-password               -alias ci-release               -keypass ci-password               -keyalg RSA -keysize 2048 -validity 1               -dname "CN=CI Build, OU=CI, O=JP3 Aviation, L=Conroe, ST=Texas, C=US"
+            {
+              echo "storeFile=../ci-release.keystore"
+              echo "storePassword=ci-password"
+              echo "keyAlias=ci-release"
+              echo "keyPassword=ci-password"
+            } > android/keystore.properties
+          fi
 
       - name: Run unit tests and build signed release bundle
         working-directory: frontend/android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon testReleaseUnitTest bundleRelease
+          ./gradlew --no-daemon clean testReleaseUnitTest bundleRelease
 
       - name: Verify bundle signature
         run: jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab
@@ -86,6 +138,6 @@ jobs:
       - name: Upload verified AAB
         uses: actions/upload-artifact@v4
         with:
-          name: peoples-choice-verification-only
+          name: ${{ env.RELEASE_MODE == 'production' && 'peoples-choice-production-aab' || 'peoples-choice-verification-only' }}
           path: frontend/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
