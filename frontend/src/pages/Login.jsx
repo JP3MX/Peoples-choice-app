@@ -41,7 +41,7 @@ export default function Login() {
             ? { email, password }
             : { email, password, name, origin_url: window.location.origin };
         const { data } = await api.post(path, body);
-        login(data.token, data.user);
+        login(data.user);
         navigate("/");
       } else if (mode === "forgot") {
         await api.post("/auth/forgot-password", { email, origin_url: window.location.origin });

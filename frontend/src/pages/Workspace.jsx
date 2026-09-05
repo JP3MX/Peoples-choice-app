@@ -27,19 +27,24 @@ export default function Workspace() {
 
   const activeAircraft = aircraftList.find((a) => a.id === activeSession?.aircraft_id) || null;
 
+  // Guard against a backend that doesn't implement a route: it falls through
+  // to the SPA's HTML instead of JSON, which must never reach state that
+  // downstream code treats as an array/object (that throws, e.g. "x.find is
+  // not a function", and black-screens the whole workspace).
   const loadBilling = useCallback(async () => {
     const { data } = await api.get("/billing/status");
-    setBilling(data);
+    setBilling(data && typeof data === "object" ? data : null);
   }, []);
 
   const loadSessions = useCallback(async () => {
     const { data } = await api.get("/sessions");
-    setSessions(data);
-    return data;
+    const list = Array.isArray(data) ? data : [];
+    setSessions(list);
+    return list;
   }, []);
   const loadAircraft = useCallback(async () => {
     const { data } = await api.get("/aircraft");
-    setAircraftList(data);
+    setAircraftList(Array.isArray(data) ? data : []);
   }, []);
 
   useEffect(() => {

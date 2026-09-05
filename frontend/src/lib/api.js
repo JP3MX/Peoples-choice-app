@@ -8,7 +8,9 @@ if (!/^https:\/\//i.test(BACKEND_URL)) {
 }
 export const API = `${BACKEND_URL}/api`;
 
-export const api = axios.create({ baseURL: API });
+// This backend authenticates with a session cookie (connect.sid), not a
+// bearer token, so cross-origin requests must carry credentials.
+export const api = axios.create({ baseURL: API, withCredentials: true });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("sk_token");
@@ -19,6 +21,11 @@ api.interceptors.request.use((config) => {
 export function getToken() {
   return localStorage.getItem("sk_token");
 }
+
+// Shared fetch() init for the raw fetch() calls (streaming chat, file
+// downloads) that don't go through the axios instance above — carries the
+// session cookie the same way `withCredentials` does for axios.
+export const authFetchInit = { credentials: "include" };
 
 export function formatApiErrorDetail(detail) {
   if (detail == null) return "Something went wrong. Please try again.";

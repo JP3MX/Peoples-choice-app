@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Send, Plane, AlertTriangle, FileText, History, ShieldCheck, Wrench, Cpu, ChevronDown, Flag } from "lucide-react";
-import { api, API, getToken } from "@/lib/api";
+import { api, API, authFetchInit } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 import { toast } from "sonner";
 
@@ -78,9 +78,7 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
   useEffect(() => {
     if (!session) return;
     setMessages([]);
-    fetch(`${API}/sessions/${session.id}/messages`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
+    fetch(`${API}/sessions/${session.id}/messages`, authFetchInit)
       .then((r) => r.json())
       .then((data) => setMessages(Array.isArray(data) ? data : []));
   }, [session]);
@@ -103,11 +101,9 @@ export default function ChatPanel({ session, aircraft, onCitations, onSessionUpd
     let meta = null;
     try {
       const res = await fetch(`${API}/sessions/${session.id}/message`, {
+        ...authFetchInit,
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
       if (res.status === 402) {

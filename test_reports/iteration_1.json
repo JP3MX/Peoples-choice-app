@@ -34,7 +34,7 @@
     "/app/test_reports/pytest/pytest_results.xml"
   ],
   "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all critical flows verified: login, register, seeded aircraft, chat streaming, persistence, applicability confirm, corpus block, history/search, logbook add, manuals tab)"},
-  "test_credentials": "mechanic@squawkking.io / squawk123 (JWT Bearer, token stored in localStorage sk_token)",
+  "test_credentials": "<demo-admin-email-redacted> / <redacted> (JWT Bearer, token stored in localStorage sk_token)",
   "seed_data_creation": "Backend seeds 12 historical corpus records + 2 starter aircraft (N172SK Cessna 172N, N28PA Piper PA-28-181) for admin user on startup. Test run also created ephemeral TEST_ sessions/logbook entries/manuals which are cleaned up by tests.",
   "retest_needed": false,
   "main_agent_can_self_test": true,

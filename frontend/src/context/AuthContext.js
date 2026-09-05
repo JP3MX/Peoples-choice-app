@@ -30,26 +30,21 @@ export function AuthProvider({ children }) {
       }
     }
 
-    const token = localStorage.getItem("sk_token");
-    if (!token) {
-      setUser(false);
-      return;
-    }
+    // This backend authenticates with a session cookie, not a bearer token,
+    // so there's no local token to gate on — just ask the backend whether
+    // the current session cookie (if any) is still valid.
     api
       .get("/auth/me")
       .then((res) => setUser(res.data))
-      .catch(() => {
-        localStorage.removeItem("sk_token");
-        setUser(false);
-      });
+      .catch(() => setUser(false));
   }, []);
 
-  const login = (token, userObj) => {
-    localStorage.setItem("sk_token", token);
+  const login = (userObj) => {
     setUser(userObj);
   };
 
   const logout = () => {
+    api.post("/auth/logout").catch(() => {});
     localStorage.removeItem("sk_token");
     setUser(false);
   };

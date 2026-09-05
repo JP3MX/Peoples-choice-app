@@ -4,7 +4,7 @@ import {
   Plane, Upload, FileText, History, BookOpen, Trash2, CheckCircle2,
   Circle, ExternalLink, Plus, ClipboardList, Image as ImageIcon, Camera, File as FileIcon,
 } from "lucide-react";
-import { api, API, getToken } from "@/lib/api";
+import { api, API, authFetchInit } from "@/lib/api";
 
 const TABS = [
   { id: "aircraft", label: "Aircraft", icon: Plane },
@@ -17,9 +17,7 @@ const TABS = [
 const DOC_TYPES = ["AMM", "Service Manual", "ICA", "Wiring Diagram", "TCDS", "AD", "Mfr Troubleshooting"];
 
 async function openAuthenticatedFile(path) {
-  const response = await fetch(`${API}${path}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
+  const response = await fetch(`${API}${path}`, authFetchInit);
   if (!response.ok) throw new Error("Download failed");
   const url = URL.createObjectURL(await response.blob());
   window.open(url, "_blank", "noopener,noreferrer");
@@ -286,7 +284,7 @@ function MediaThumb({ item }) {
   useEffect(() => {
     let revoke;
     if (item.kind === "image") {
-      fetch(`${API}/media/${item.id}/download`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      fetch(`${API}/media/${item.id}/download`, authFetchInit)
         .then((r) => {
           if (!r.ok) throw new Error("download failed");
           return r.blob();

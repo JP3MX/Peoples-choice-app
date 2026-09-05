@@ -25,7 +25,7 @@ Build Squawk King IA as a full-stack hybrid aircraft maintenance troubleshooting
 - Applicability gating + exact STOP message when approved data unavailable.
 
 ## Implemented (2026-08-16)
-- JWT auth (register/login/me); demo admin seeded (mechanic@squawkking.io / squawk123).
+- JWT auth (register/login/me); demo admin seeded (<demo-admin-email-redacted> / <redacted>).
 - Aircraft profiles CRUD + confirm-applicability gating (make/model/year/serial/config).
 - PDF manual upload → object storage + pypdf text extraction; doc type, ATA, current/superseded status; view + soft-delete; ownership-scoped download.
 - Historical corpus (12 seeded records) with keyword+aircraft scoring; searchable History tab.
