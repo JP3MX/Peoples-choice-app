@@ -147,6 +147,20 @@ async def apply_subscription(session_id: str):
 app = FastAPI(title="Squawk King IA")
 api_router = APIRouter(prefix="/api")
 
+
+@api_router.get("/health")
+async def health():
+    """Unauthenticated liveness + DB-connectivity probe (also used as the
+    platform health-check path)."""
+    db_ok = False
+    try:
+        await client.admin.command("ping")
+        db_ok = True
+    except Exception as e:  # pragma: no cover - only on infra failure
+        logger.error(f"health: mongo ping failed: {e}")
+    return {"ok": db_ok, "service": "peoples-choice", "db": db_ok}
+
+
 # ---------------------------------------------------------------------------
 # Object storage helpers
 # ---------------------------------------------------------------------------

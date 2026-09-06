@@ -1,0 +1,19 @@
+# Build ONLY the FastAPI backend in backend/.
+# - strip #sha256 off the litellm URL so it matches emergentintegrations' dep,
+#   then ONE pip pass (two-phase skews fastapi/pydantic).
+# - tokenizers (Rust ext via litellm) needs libstdc++.so.6 at RUNTIME, so add
+#   stdenv.cc.cc.lib to nixLibs (nixpacks wires it into LD_LIBRARY_PATH).
+[phases.setup]
+nixPkgs = ["python311", "gcc", "glibcLocales"]
+nixLibs = ["stdenv.cc.cc.lib", "zlib"]
+
+[phases.install]
+cmds = [
+  "python -m venv --copies /opt/venv",
+  ". /opt/venv/bin/activate && pip install --upgrade pip",
+  "sed 's|#sha256=[0-9a-f]*||' backend/requirements.txt > /tmp/req.txt",
+  ". /opt/venv/bin/activate && pip install --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ -r /tmp/req.txt emergentintegrations==0.2.0"
+]
+
+[start]
+cmd = "export LD_LIBRARY_PATH=/nix/var/nix/profiles/default/lib:$LD_LIBRARY_PATH; . /opt/venv/bin/activate && cd backend && uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"

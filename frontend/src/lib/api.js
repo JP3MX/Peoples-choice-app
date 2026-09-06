@@ -8,8 +8,8 @@ if (!/^https:\/\//i.test(BACKEND_URL)) {
 }
 export const API = `${BACKEND_URL}/api`;
 
-// This backend authenticates with a session cookie (connect.sid), not a
-// bearer token, so cross-origin requests must carry credentials.
+// The backend authenticates with a JWT bearer token (localStorage.sk_token),
+// attached by the request interceptor below — not a session cookie.
 export const api = axios.create({ baseURL: API, withCredentials: true });
 
 api.interceptors.request.use((config) => {

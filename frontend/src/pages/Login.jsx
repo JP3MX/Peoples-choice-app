@@ -41,6 +41,10 @@ export default function Login() {
             ? { email, password }
             : { email, password, name, origin_url: window.location.origin };
         const { data } = await api.post(path, body);
+        // The backend issues a JWT (Authorization: Bearer). Persist it so the
+        // request interceptor attaches it and the session survives a reload /
+        // app relaunch — without this, every relaunch lands back on /login.
+        if (data.token) localStorage.setItem("sk_token", data.token);
         login(data.user);
         navigate("/");
       } else if (mode === "forgot") {

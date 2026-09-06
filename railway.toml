@@ -1,0 +1,10 @@
+# Deploy scaffolding for the People's Choice FastAPI backend (backend/).
+# Added because the repo carried no self-contained deploy config (Emergent-managed).
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

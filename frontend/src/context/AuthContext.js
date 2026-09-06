@@ -30,13 +30,16 @@ export function AuthProvider({ children }) {
       }
     }
 
-    // This backend authenticates with a session cookie, not a bearer token,
-    // so there's no local token to gate on — just ask the backend whether
-    // the current session cookie (if any) is still valid.
+    // The backend authenticates with a JWT bearer token stored in
+    // localStorage.sk_token (the api request interceptor attaches it). Ask the
+    // backend whether that token is still valid; 401 => logged out.
     api
       .get("/auth/me")
       .then((res) => setUser(res.data))
-      .catch(() => setUser(false));
+      .catch(() => {
+        localStorage.removeItem("sk_token");
+        setUser(false);
+      });
   }, []);
 
   const login = (userObj) => {
